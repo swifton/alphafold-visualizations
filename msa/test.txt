@@ -1,0 +1,10 @@
+Hello world
+- This line starts with a dash
+another line without capital
+Test line with capital T
+- Second dash line
+Capital letter C here
+lowercase line
+UPPERCASE LINE
+middle line
+- Final dash line
