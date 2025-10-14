@@ -70,7 +70,7 @@ def align_sequences(seq1, seq2):
 
 class MSAHandler(BaseHTTPRequestHandler):
     # Class variable to store current sequence index
-    current_sequence_index = 1  # Start with the second sequence (line 7, after the reference)
+    current_sequence_index = 0
     def do_GET(self):
         if self.path == '/':
             # Serve the main HTML page
@@ -136,9 +136,8 @@ class MSAHandler(BaseHTTPRequestHandler):
         total_sequences = 0
 
         # Calculate the target line for seq2
-        # Sequence lines are at indices: 2 (reference), 6, 8, 10, 12, ...
-        # current_sequence_index 0 -> line 6, index 1 -> line 8, etc.
-        target_line_index = 6 + (MSAHandler.current_sequence_index * 2)
+        # Sequence lines are at indices: 2 (reference), 4, 6, 8, 10, 12, ...
+        target_line_index = 4 + (MSAHandler.current_sequence_index * 2)
 
         with open('lamprey.a3m', 'r') as f:
             lines = f.readlines()
