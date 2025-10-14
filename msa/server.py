@@ -9,61 +9,88 @@ import os
 
 def align_sequences(seq1, seq2):
     """
-    Align two sequences where seq2 may contain dashes for deletions.
+    Align two sequences using Needleman-Wunsch algorithm.
+    Dashes are treated as gap characters (not part of the actual sequence).
 
     Returns a list of tuples where each tuple is:
     - (idx1, idx2): matching positions in both sequences
     - (idx1, -1): deletion in seq2 (gap in seq2)
-    - (-1, idx2): insertion in seq2 (gap in seq1, represented by dash in seq1 if present)
+    - (-1, idx2): insertion in seq2 (gap in seq1)
 
     Args:
-        seq1: Reference sequence (string)
+        seq1: Reference sequence (string), may contain dashes '-' for gaps
         seq2: Aligned sequence (string), may contain dashes '-' for gaps
 
     Returns:
         List of tuples representing the alignment
     """
+    # Remove dashes from both sequences before alignment
+    # We'll treat dashes as pre-existing gaps that should be preserved
+    seq1_clean = seq1.replace('-', '')
+    seq2_clean = seq2.replace('-', '')
+
+    # Use Needleman-Wunsch algorithm on clean sequences
+    alignment = needleman_wunsch(seq1_clean, seq2_clean)
+
+    return alignment
+
+
+def needleman_wunsch(seq1, seq2):
+    """
+    Needleman-Wunsch global sequence alignment algorithm.
+
+    Args:
+        seq1: First sequence (string)
+        seq2: Second sequence (string)
+
+    Returns:
+        List of tuples representing the alignment
+    """
+    # Scoring scheme
+    match_score = 1
+    mismatch_score = -1
+    gap_penalty = -2
+
+    m, n = len(seq1), len(seq2)
+
+    # Initialize scoring matrix
+    score = [[0] * (n + 1) for _ in range(m + 1)]
+
+    # Initialize first row and column
+    for i in range(m + 1):
+        score[i][0] = gap_penalty * i
+    for j in range(n + 1):
+        score[0][j] = gap_penalty * j
+
+    # Fill the scoring matrix
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            match = score[i-1][j-1] + (match_score if seq1[i-1] == seq2[j-1] else mismatch_score)
+            delete = score[i-1][j] + gap_penalty
+            insert = score[i][j-1] + gap_penalty
+            score[i][j] = max(match, delete, insert)
+
+    # Traceback to find alignment
     alignment = []
-    idx1 = 0  # Index in seq1
-    idx2 = 0  # Index in seq2
+    i, j = m, n
 
-    # Handle case where sequences are pre-aligned with dashes
-    if '-' in seq1 or '-' in seq2:
-        # Sequences are already aligned
-        max_len = max(len(seq1), len(seq2))
-        for i in range(max_len):
-            char1 = seq1[i] if i < len(seq1) else '-'
-            char2 = seq2[i] if i < len(seq2) else '-'
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and score[i][j] == score[i-1][j-1] + (match_score if seq1[i-1] == seq2[j-1] else mismatch_score):
+            # Match or mismatch
+            alignment.append((i-1, j-1))
+            i -= 1
+            j -= 1
+        elif i > 0 and score[i][j] == score[i-1][j] + gap_penalty:
+            # Deletion (gap in seq2)
+            alignment.append((i-1, -1))
+            i -= 1
+        else:
+            # Insertion (gap in seq1)
+            alignment.append((-1, j-1))
+            j -= 1
 
-            if char1 == '-' and char2 == '-':
-                # Both gaps, skip
-                continue
-            elif char1 == '-':
-                # Gap in seq1, insertion in seq2
-                alignment.append((-1, idx2))
-                idx2 += 1
-            elif char2 == '-':
-                # Gap in seq2, deletion from seq1
-                alignment.append((idx1, -1))
-                idx1 += 1
-            else:
-                # Both have characters
-                alignment.append((idx1, idx2))
-                idx1 += 1
-                idx2 += 1
-    else:
-        # Simple case: no dashes, sequences align position by position
-        min_len = min(len(seq1), len(seq2))
-        for i in range(min_len):
-            alignment.append((i, i))
-
-        # Handle extra characters in longer sequence
-        if len(seq1) > len(seq2):
-            for i in range(len(seq2), len(seq1)):
-                alignment.append((i, -1))
-        elif len(seq2) > len(seq1):
-            for i in range(len(seq1), len(seq2)):
-                alignment.append((-1, i))
+    # Reverse alignment (traceback builds it backwards)
+    alignment.reverse()
 
     return alignment
 
