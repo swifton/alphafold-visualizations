@@ -16,14 +16,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Update the display
         fileLoader.innerHTML = `
-            <h2>MSA Sequence Visualization</h2>
+            <h2>MSA Sequence Alignment</h2>
             <p>File: ${data.filename}</p>
-            <p>Sequence length: ${data.sequence_length} amino acids</p>
+            <p>Sequence 1 length: ${data.seq1_length} amino acids</p>
+            <p>Sequence 2 length: ${data.seq2_length} amino acids</p>
         `;
 
-        console.log(`Loaded sequence of length ${data.sequence_length} from ${data.filename}`);
+        console.log(`Loaded 2 sequences from ${data.filename}`);
+        console.log(`Alignment has ${data.alignment.length} positions`);
 
-        visualizeSequence(data.sequence);
+        visualizeAlignment(data.seq1, data.seq2, data.alignment);
 
     } catch (error) {
         console.error('Error loading file:', error);
@@ -35,58 +37,107 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-function visualizeSequence(sequence) {
+function visualizeAlignment(seq1, seq2, alignment) {
     // Configuration
     const boxSize = 30;
     const padding = 2;
-    const color = '#2ca02c';  // Single green color for all letters
+    const rowGap = 10;
+    const color1 = '#2ca02c';  // Green for sequence 1
+    const color2 = '#1f77b4';  // Blue for sequence 2
+    const gapColor = '#e0e0e0'; // Light gray for gaps
 
-    // Calculate dimensions (single row)
-    const width = sequence.length * (boxSize + padding);
-    const height = boxSize + padding;
+    // Calculate dimensions (two rows)
+    const width = alignment.length * (boxSize + padding);
+    const height = 2 * boxSize + rowGap + padding;
 
     // Get SVG element
     const svg = document.getElementById('sequence-viz');
     svg.setAttribute('width', width);
     svg.setAttribute('height', height);
 
-    // Create rectangles for each letter in a single row
-    for (let i = 0; i < sequence.length; i++) {
-        const letter = sequence[i];
+    // Remove dashes from sequences to get actual characters by index
+    const seq1_clean = seq1.replace(/-/g, '');
+    const seq2_clean = seq2.replace(/-/g, '');
+
+    // Create visualization for each alignment position
+    for (let i = 0; i < alignment.length; i++) {
+        const [idx1, idx2] = alignment[i];
         const x = i * (boxSize + padding);
-        const y = 0;
 
-        // Create group
-        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        // Draw sequence 1 box (top row)
+        const g1 = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        const rect1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect1.setAttribute('x', x);
+        rect1.setAttribute('y', 0);
+        rect1.setAttribute('width', boxSize);
+        rect1.setAttribute('height', boxSize);
 
-        // Create rectangle
-        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        rect.setAttribute('x', x);
-        rect.setAttribute('y', y);
-        rect.setAttribute('width', boxSize);
-        rect.setAttribute('height', boxSize);
-        rect.setAttribute('fill', color);
-        rect.setAttribute('stroke', '#333');
-        rect.setAttribute('stroke-width', '1');
-        rect.setAttribute('rx', '2');
+        if (idx1 === -1) {
+            // Gap in sequence 1
+            rect1.setAttribute('fill', gapColor);
+            rect1.setAttribute('stroke', '#999');
+            rect1.setAttribute('stroke-dasharray', '3,3');
+        } else {
+            rect1.setAttribute('fill', color1);
+            rect1.setAttribute('stroke', '#333');
+        }
+        rect1.setAttribute('stroke-width', '1');
+        rect1.setAttribute('rx', '2');
+        g1.appendChild(rect1);
 
-        // Create text
-        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', x + boxSize / 2);
-        text.setAttribute('y', y + boxSize / 2);
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('dominant-baseline', 'central');
-        text.setAttribute('fill', 'white');
-        text.setAttribute('font-size', '14px');
-        text.setAttribute('font-weight', 'bold');
-        text.setAttribute('font-family', 'monospace');
-        text.textContent = letter;
+        // Add text for sequence 1
+        if (idx1 !== -1) {
+            const text1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text1.setAttribute('x', x + boxSize / 2);
+            text1.setAttribute('y', boxSize / 2);
+            text1.setAttribute('text-anchor', 'middle');
+            text1.setAttribute('dominant-baseline', 'central');
+            text1.setAttribute('fill', 'white');
+            text1.setAttribute('font-size', '14px');
+            text1.setAttribute('font-weight', 'bold');
+            text1.setAttribute('font-family', 'monospace');
+            text1.textContent = seq1_clean[idx1];
+            g1.appendChild(text1);
+        }
+        svg.appendChild(g1);
 
-        // Add to group and SVG
-        g.appendChild(rect);
-        g.appendChild(text);
-        svg.appendChild(g);
+        // Draw sequence 2 box (bottom row)
+        const g2 = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        const rect2 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect2.setAttribute('x', x);
+        rect2.setAttribute('y', boxSize + rowGap);
+        rect2.setAttribute('width', boxSize);
+        rect2.setAttribute('height', boxSize);
+
+        if (idx2 === -1) {
+            // Gap in sequence 2
+            rect2.setAttribute('fill', gapColor);
+            rect2.setAttribute('stroke', '#999');
+            rect2.setAttribute('stroke-dasharray', '3,3');
+        } else {
+            rect2.setAttribute('fill', color2);
+            rect2.setAttribute('stroke', '#333');
+        }
+        rect2.setAttribute('stroke-width', '1');
+        rect2.setAttribute('rx', '2');
+        g2.appendChild(rect2);
+
+        // Add text for sequence 2
+        if (idx2 !== -1) {
+            const text2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text2.setAttribute('x', x + boxSize / 2);
+            text2.setAttribute('y', boxSize + rowGap + boxSize / 2);
+            text2.setAttribute('text-anchor', 'middle');
+            text2.setAttribute('dominant-baseline', 'central');
+            text2.setAttribute('fill', 'white');
+            text2.setAttribute('font-size', '14px');
+            text2.setAttribute('font-weight', 'bold');
+            text2.setAttribute('font-family', 'monospace');
+            text2.textContent = seq2_clean[idx2];
+            g2.appendChild(text2);
+        }
+        svg.appendChild(g2);
     }
 
-    console.log(`Visualized ${sequence.length} amino acids in a single row`);
+    console.log(`Visualized alignment of ${alignment.length} positions`);
 }
