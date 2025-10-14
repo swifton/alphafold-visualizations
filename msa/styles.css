@@ -32,7 +32,15 @@ header h1 {
 main {
     flex: 1;
     padding: 2rem;
-    max-width: 1200px;
-    margin: 0 auto;
     width: 100%;
+}
+
+#visualization {
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: white;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
