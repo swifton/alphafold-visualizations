@@ -39,14 +39,18 @@ class MSAHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
 
-            # Read the first 20 lines of lamprey.a3m
+            # Read every other line starting with the third line (index 2)
+            # Lines: 3, 5, 7, 9, ... (indices: 2, 4, 6, 8, ...)
             lines = []
             total_lines = 0
+            selected_lines = 0
             with open('lamprey.a3m', 'r') as f:
                 for i, line in enumerate(f):
                     total_lines += 1
-                    if i < 20:
+                    # Start at line 3 (index 2) and take every other line
+                    if i >= 2 and (i - 2) % 2 == 0 and selected_lines < 20:
                         lines.append(line.rstrip('\n'))
+                        selected_lines += 1
 
             response = {
                 'filename': 'lamprey.a3m',
