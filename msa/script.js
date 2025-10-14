@@ -2,11 +2,22 @@
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('MSA Visualizations app loaded');
 
+    // Load initial sequences
+    await loadSequences('/api/msa');
+
+    // Add event listener to Next button
+    const nextBtn = document.getElementById('next-btn');
+    nextBtn.addEventListener('click', async () => {
+        await loadSequences('/api/next');
+    });
+});
+
+async function loadSequences(endpoint) {
     const fileLoader = document.getElementById('file-loader');
 
     try {
         // Fetch MSA data from backend API
-        const response = await fetch('/api/msa');
+        const response = await fetch(endpoint);
 
         if (!response.ok) {
             throw new Error(`Failed to load file: ${response.statusText}`);
@@ -18,12 +29,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         fileLoader.innerHTML = `
             <h2>MSA Sequence Alignment</h2>
             <p>File: ${data.filename}</p>
-            <p>Sequence 1 length: ${data.seq1_length} amino acids</p>
-            <p>Sequence 2 length: ${data.seq2_length} amino acids</p>
+            <p>Showing sequence ${data.current_index + 1} of ${data.total_sequences}</p>
+            <p>Sequence 1 (reference): ${data.seq1_length} amino acids</p>
+            <p>Sequence 2: ${data.seq2_length} amino acids ${data.seq2_header ? '- ' + data.seq2_header : ''}</p>
         `;
 
-        console.log(`Loaded 2 sequences from ${data.filename}`);
+        console.log(`Loaded sequence ${data.current_index + 1} of ${data.total_sequences}`);
         console.log(`Alignment has ${data.alignment.length} positions`);
+
+        // Clear previous visualization
+        const svg = document.getElementById('sequence-viz');
+        svg.innerHTML = '';
 
         visualizeAlignment(data.seq1, data.seq2, data.alignment);
 
@@ -35,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <p>Make sure the Python server is running (python3 server.py)</p>
         `;
     }
-});
+}
 
 function visualizeAlignment(seq1, seq2, alignment) {
     // Configuration

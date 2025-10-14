@@ -69,6 +69,8 @@ def align_sequences(seq1, seq2):
 
 
 class MSAHandler(BaseHTTPRequestHandler):
+    # Class variable to store current sequence index
+    current_sequence_index = 1  # Start with the second sequence (line 7, after the reference)
     def do_GET(self):
         if self.path == '/':
             # Serve the main HTML page
@@ -100,38 +102,84 @@ class MSAHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
 
-            # Read line 3 (index 2) and line 7 (index 6)
-            seq1 = ""
-            seq2 = ""
-            total_lines = 0
-            with open('lamprey.a3m', 'r') as f:
-                for i, line in enumerate(f):
-                    total_lines += 1
-                    if i == 2:  # Line 3 (index 2)
-                        seq1 = line.rstrip('\n')
-                    elif i == 6:  # Line 7 (index 6)
-                        seq2 = line.rstrip('\n')
-                        break
+            # Get the current sequence based on index
+            response = self.get_sequence_alignment()
+            self.wfile.write(json.dumps(response).encode())
 
-            # Compute alignment
-            alignment = align_sequences(seq1, seq2)
+        elif self.path == '/api/next':
+            # API endpoint to get the next sequence
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
 
-            response = {
-                'filename': 'lamprey.a3m',
-                'seq1': seq1,
-                'seq2': seq2,
-                'alignment': alignment,
-                'seq1_length': len(seq1.replace('-', '')),
-                'seq2_length': len(seq2.replace('-', '')),
-                'total_lines': total_lines
-            }
+            # Increment the sequence index
+            MSAHandler.current_sequence_index += 1
 
+            # Get the next sequence
+            response = self.get_sequence_alignment()
             self.wfile.write(json.dumps(response).encode())
 
         else:
             self.send_response(404)
             self.end_headers()
             self.wfile.write(b'Not Found')
+
+    def get_sequence_alignment(self):
+        """
+        Get alignment for current sequence index.
+        Reference sequence is always line 3.
+        Comparison sequences start at line 7 and every other line after (7, 9, 11, ...).
+        """
+        seq1 = ""
+        seq2 = ""
+        seq2_header = ""
+        total_sequences = 0
+
+        # Calculate the target line for seq2
+        # Sequence lines are at indices: 2 (reference), 6, 8, 10, 12, ...
+        # current_sequence_index 0 -> line 6, index 1 -> line 8, etc.
+        target_line_index = 6 + (MSAHandler.current_sequence_index * 2)
+
+        with open('lamprey.a3m', 'r') as f:
+            lines = f.readlines()
+            total_lines = len(lines)
+
+            # Get reference sequence (line 3, index 2)
+            if len(lines) > 2:
+                seq1 = lines[2].rstrip('\n')
+
+            # Count total sequences (every other line starting from line 7)
+            total_sequences = (total_lines - 3) // 2
+
+            # Check if we've gone past the end, wrap around
+            if MSAHandler.current_sequence_index >= total_sequences:
+                MSAHandler.current_sequence_index = 0
+                target_line_index = 6
+
+            # Get the target sequence
+            if target_line_index < total_lines:
+                # Get header (line before sequence)
+                if target_line_index > 0:
+                    seq2_header = lines[target_line_index - 1].rstrip('\n')
+                seq2 = lines[target_line_index].rstrip('\n')
+            else:
+                # Shouldn't happen but handle gracefully
+                seq2 = seq1
+
+        # Compute alignment
+        alignment = align_sequences(seq1, seq2)
+
+        return {
+            'filename': 'lamprey.a3m',
+            'seq1': seq1,
+            'seq2': seq2,
+            'seq2_header': seq2_header,
+            'alignment': alignment,
+            'seq1_length': len(seq1.replace('-', '')),
+            'seq2_length': len(seq2.replace('-', '')),
+            'current_index': MSAHandler.current_sequence_index,
+            'total_sequences': total_sequences
+        }
 
     def log_message(self, format, *args):
         # Custom log format
