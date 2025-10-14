@@ -60,6 +60,7 @@ function visualizeAlignment(seq1, seq2, alignment) {
     const rowGap = 10;
     const color1 = '#2ca02c';  // Green for sequence 1
     const color2 = '#1f77b4';  // Blue for sequence 2
+    const mismatchColor = '#d62728';  // Red for mismatches
     const gapColor = '#e0e0e0'; // Light gray for gaps
 
     // Calculate dimensions (two rows)
@@ -80,6 +81,9 @@ function visualizeAlignment(seq1, seq2, alignment) {
         const [idx1, idx2] = alignment[i];
         const x = i * (boxSize + padding);
 
+        // Check if this is a mismatch (both have amino acids but they're different)
+        const isMismatch = idx1 !== -1 && idx2 !== -1 && seq1_clean[idx1] !== seq2_clean[idx2];
+
         // Draw sequence 1 box (top row)
         const g1 = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         const rect1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -93,7 +97,12 @@ function visualizeAlignment(seq1, seq2, alignment) {
             rect1.setAttribute('fill', gapColor);
             rect1.setAttribute('stroke', '#999');
             rect1.setAttribute('stroke-dasharray', '3,3');
+        } else if (isMismatch) {
+            // Mismatch - use red
+            rect1.setAttribute('fill', mismatchColor);
+            rect1.setAttribute('stroke', '#333');
         } else {
+            // Match - use normal color
             rect1.setAttribute('fill', color1);
             rect1.setAttribute('stroke', '#333');
         }
@@ -130,7 +139,12 @@ function visualizeAlignment(seq1, seq2, alignment) {
             rect2.setAttribute('fill', gapColor);
             rect2.setAttribute('stroke', '#999');
             rect2.setAttribute('stroke-dasharray', '3,3');
+        } else if (isMismatch) {
+            // Mismatch - use red
+            rect2.setAttribute('fill', mismatchColor);
+            rect2.setAttribute('stroke', '#333');
         } else {
+            // Match - use normal color
             rect2.setAttribute('fill', color2);
             rect2.setAttribute('stroke', '#333');
         }
