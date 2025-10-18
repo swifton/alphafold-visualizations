@@ -44,7 +44,8 @@ def align_sequences(seq1, seq2):
 def build_matrix_from_file(filename):
     """
     Build diff_matrix by tracking which letters in sequences were changed
-    compared to the first sequence.
+    compared to the first sequence. Uses Needleman-Wunsch alignment to handle
+    sequences of different lengths.
 
     Returns:
         tuple: (matrix, diff_count, diff_matrix)
@@ -60,28 +61,57 @@ def build_matrix_from_file(filename):
                 lines.append(line)
                 if first_line is None:
                     first_line = line
-                    n = len(first_line)
+                    # Get the length of the first sequence (without gaps)
+                    first_clean = first_line.replace('-', '')
+                    n = len(first_clean)
                     matrix = np.ones((n, n), dtype=float)  # initialize to ones
     if first_line is None:
         raise ValueError("No valid lines found in file.")
+
     diff_count = np.zeros(n, dtype=float)
     diff_matrix = np.zeros((n, n), dtype=float)
+
+    # Process each sequence (skip the first one since it's the reference)
     for line in lines[1:]:
-        if len(line) != len(first_line):
-            continue
-        diff_indices = [i for i in range(n) if line[i] != first_line[i]]
-        same_indices = [i for i in range(n) if line[i] == first_line[i]]
-        for i in range(n):
-            if line[i] != first_line[i]:
-                diff_count[i] += 1
+        # Align the current sequence with the first sequence
+        alignment = align_sequences(first_line, line)
+
+        # Get clean sequences (without gaps)
+        first_clean = first_line.replace('-', '')
+        line_clean = line.replace('-', '')
+
+        # Track which positions in the first sequence are different/same
+        diff_indices = []
+        same_indices = []
+
+        for idx1, idx2 in alignment:
+            # Both positions have amino acids (not gaps)
+            if idx1 != -1 and idx2 != -1:
+                if first_clean[idx1] != line_clean[idx2]:
+                    # Different amino acids at aligned positions
+                    diff_indices.append(idx1)
+                else:
+                    # Same amino acids at aligned positions
+                    same_indices.append(idx1)
+            elif idx1 != -1:
+                # Gap in the aligned sequence (deletion) - treat as difference
+                diff_indices.append(idx1)
+
+        # Update diff_count for positions that differ
+        for i in diff_indices:
+            diff_count[i] += 1
+
         # Fill diff_matrix: for each i in diff_indices, for each j in same_indices
         for i in diff_indices:
             for j in same_indices:
                 diff_matrix[i, j] += 1
+
+        # Fill matrix: for pairs of same_indices
         for i in range(len(same_indices)):
             for j in range(i+1, len(same_indices)):
                 matrix[same_indices[i]][same_indices[j]] += 1
                 matrix[same_indices[j]][same_indices[i]] += 1
+
     return np.array(matrix), diff_count, diff_matrix
 
 
