@@ -5,12 +5,7 @@ Minimal web server for MSA visualization
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import os
-import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
-import matplotlib.pyplot as plt
 import numpy as np
-import io
-import base64
 
 
 def align_sequences(seq1, seq2):
@@ -115,35 +110,34 @@ def build_matrix_from_file(filename):
     return np.array(matrix), diff_count, diff_matrix
 
 
-def generate_matrix_image(filename):
+def get_matrix_data(filename):
     """
-    Generate a matplotlib image of the diff_matrix and return it as a base64 encoded string.
+    Get the diff_matrix data for frontend rendering.
 
     Args:
         filename: Path to the MSA file
 
     Returns:
-        str: Base64 encoded PNG image
+        dict: Dictionary containing matrix data and metadata
     """
     matrix, diff_count, diff_matrix = build_matrix_from_file(filename)
 
-    # Create the plot
-    plt.figure(figsize=(10, 8))
-    plt.imshow(diff_matrix, cmap='coolwarm', interpolation='nearest')
-    plt.colorbar(label='Normalized Count')
-    plt.title('Matrix Visualization (Element-wise Division by diff_count)')
-    plt.xlabel('Position')
-    plt.ylabel('Position')
+    # Get matrix dimensions
+    matrix_size = diff_matrix.shape[0]
 
-    # Save to bytes buffer
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
-    plt.close()
-    buf.seek(0)
+    # Get min and max values for color scaling
+    min_val = float(np.min(diff_matrix))
+    max_val = float(np.max(diff_matrix))
 
-    # Encode to base64
-    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    return img_base64
+    # Convert matrix to list for JSON serialization
+    matrix_data = diff_matrix.tolist()
+
+    return {
+        'matrix': matrix_data,
+        'size': matrix_size,
+        'min_value': min_val,
+        'max_value': max_val
+    }
 
 
 def needleman_wunsch(seq1, seq2):
@@ -258,17 +252,17 @@ class MSAHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode())
 
         elif self.path == '/api/matrix':
-            # API endpoint to get the matrix visualization
+            # API endpoint to get the matrix data
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
 
             try:
-                # Generate the matrix image
-                img_base64 = generate_matrix_image('lamprey.a3m')
+                # Get the matrix data
+                matrix_data = get_matrix_data('lamprey.a3m')
                 response = {
                     'success': True,
-                    'image': img_base64
+                    **matrix_data
                 }
             except Exception as e:
                 response = {

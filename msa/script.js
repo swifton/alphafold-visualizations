@@ -182,7 +182,6 @@ async function loadMatrix() {
     const matrixBtn = document.getElementById('matrix-btn');
     const spinner = document.getElementById('matrix-spinner');
     const matrixVisualization = document.getElementById('matrix-visualization');
-    const matrixImg = document.getElementById('matrix-img');
 
     try {
         // Disable button and show spinner
@@ -202,9 +201,10 @@ async function loadMatrix() {
         console.log('Matrix received');
 
         if (data.success) {
-            // Display the matrix image
-            matrixImg.src = `data:image/png;base64,${data.image}`;
+            // Render the matrix as SVG
+            renderMatrixSVG(data.matrix, data.size, data.min_value, data.max_value);
             matrixVisualization.style.display = 'block';
+
             console.log('Matrix visualization displayed');
         } else {
             throw new Error(data.error || 'Failed to generate matrix');
@@ -218,4 +218,72 @@ async function loadMatrix() {
         matrixBtn.disabled = false;
         spinner.style.display = 'none';
     }
+}
+
+function renderMatrixSVG(matrix, size, minValue, maxValue) {
+    const svg = document.getElementById('matrix-svg');
+    const positionDisplay = document.getElementById('matrix-position');
+
+    // Clear previous content
+    svg.innerHTML = '';
+
+    // Configuration
+    const cellSize = 10; // Size of each cell in pixels
+    const width = size * cellSize;
+    const height = size * cellSize;
+
+    // Set SVG dimensions
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+    // Create color scale function (coolwarm colormap approximation)
+    const getColor = (value) => {
+        // Normalize value to 0-1 range
+        const normalized = (value - minValue) / (maxValue - minValue);
+
+        // Coolwarm colormap: blue (cool) to white to red (warm)
+        if (normalized < 0.5) {
+            // Blue to white
+            const t = normalized * 2;
+            const r = Math.round(59 + (255 - 59) * t);
+            const g = Math.round(76 + (255 - 76) * t);
+            const b = Math.round(192 + (255 - 192) * t);
+            return `rgb(${r}, ${g}, ${b})`;
+        } else {
+            // White to red
+            const t = (normalized - 0.5) * 2;
+            const r = 255;
+            const g = Math.round(255 - 255 * t);
+            const b = Math.round(255 - 89 * t);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+    };
+
+    // Render each cell
+    for (let row = 0; row < size; row++) {
+        for (let col = 0; col < size; col++) {
+            const value = matrix[row][col];
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+
+            rect.setAttribute('x', col * cellSize);
+            rect.setAttribute('y', row * cellSize);
+            rect.setAttribute('width', cellSize);
+            rect.setAttribute('height', cellSize);
+            rect.setAttribute('fill', getColor(value));
+
+            // Add hover event to display position
+            rect.addEventListener('mouseenter', () => {
+                positionDisplay.textContent = `Position: (${row}, ${col}) Value: ${value.toFixed(2)}`;
+            });
+
+            rect.addEventListener('mouseleave', () => {
+                positionDisplay.textContent = '';
+            });
+
+            svg.appendChild(rect);
+        }
+    }
+
+    console.log(`Rendered ${size}x${size} matrix with ${size * size} cells`);
 }
