@@ -228,6 +228,15 @@ class MSAHandler(BaseHTTPRequestHandler):
             with open('script.js', 'rb') as f:
                 self.wfile.write(f.read())
 
+        elif self.path == '/lamprey.pdb':
+            # Serve PDB file
+            self.send_response(200)
+            self.send_header('Content-type', 'chemical/x-pdb')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            with open('lamprey.pdb', 'rb') as f:
+                self.wfile.write(f.read())
+
         elif self.path == '/api/msa':
             # API endpoint to get MSA file content with alignment
             self.send_response(200)

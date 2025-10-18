@@ -103,6 +103,31 @@ main {
     color: #2c3e50;
 }
 
+.matrix-container {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+.matrix-left {
+    flex: 0 0 auto;
+}
+
+.matrix-right {
+    flex: 1;
+    min-height: 600px;
+}
+
+#molstar-viewer {
+    width: 100%;
+    height: 600px;
+    position: relative;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.msp-viewport-controls { display: none !important; }
+
 .matrix-position {
     margin-bottom: 0.5rem;
     padding: 0.5rem;

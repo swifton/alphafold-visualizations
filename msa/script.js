@@ -205,6 +205,9 @@ async function loadMatrix() {
             renderMatrixSVG(data.matrix, data.size, data.min_value, data.max_value);
             matrixVisualization.style.display = 'block';
 
+            // Initialize Mol* viewer
+            await initMolstarViewer();
+
             console.log('Matrix visualization displayed');
         } else {
             throw new Error(data.error || 'Failed to generate matrix');
@@ -286,4 +289,44 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
     }
 
     console.log(`Rendered ${size}x${size} matrix with ${size * size} cells`);
+}
+
+let molstarViewer = null;
+
+async function initMolstarViewer() {
+    // Don't reinitialize if already created
+    if (molstarViewer) {
+        console.log('Mol* viewer already initialized');
+        return;
+    }
+
+    const viewerElement = document.getElementById('molstar-viewer');
+
+    try {
+        console.log('Initializing Mol* viewer...');
+
+        // Create the Mol* viewer instance
+        molstarViewer = await molstar.Viewer.create(viewerElement, {
+            layoutIsExpanded: false,
+            layoutShowControls: false,
+            layoutShowRemoteState: false,
+            layoutShowSequence: false,
+            layoutShowLog: false,
+            layoutShowLeftPanel: false,
+            viewportShowExpand: false,
+            viewportShowSelectionMode: false,
+            viewportShowAnimation: false,
+        });
+
+        console.log('Mol* viewer created, loading structure...');
+
+        // Load the PDB file
+        await molstarViewer.loadStructureFromUrl('/lamprey.pdb', 'pdb', false);
+
+        console.log('Structure loaded successfully');
+
+    } catch (error) {
+        console.error('Error initializing Mol* viewer:', error);
+        throw error;
+    }
 }

@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MSA Visualizations</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/molstar@latest/build/viewer/molstar.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/molstar@latest/build/viewer/molstar.js"></script>
 </head>
 <body>
     <div id="app">
@@ -26,8 +28,15 @@
             </div>
             <div id="matrix-visualization" style="display: none;">
                 <h2>Difference Matrix</h2>
-                <svg id="matrix-svg"></svg>
-                <div id="matrix-position" class="matrix-position"></div>
+                <div class="matrix-container">
+                    <div class="matrix-left">
+                        <svg id="matrix-svg"></svg>
+                        <div id="matrix-position" class="matrix-position"></div>
+                    </div>
+                    <div class="matrix-right">
+                        <div id="molstar-viewer"></div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
