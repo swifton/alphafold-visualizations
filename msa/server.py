@@ -5,6 +5,12 @@ Minimal web server for MSA visualization
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import os
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
+import matplotlib.pyplot as plt
+import numpy as np
+import io
+import base64
 
 
 def align_sequences(seq1, seq2):
@@ -33,6 +39,81 @@ def align_sequences(seq1, seq2):
     alignment = needleman_wunsch(seq1_clean, seq2_clean)
 
     return alignment
+
+
+def build_matrix_from_file(filename):
+    """
+    Build diff_matrix by tracking which letters in sequences were changed
+    compared to the first sequence.
+
+    Returns:
+        tuple: (matrix, diff_count, diff_matrix)
+    """
+    first_line = None
+    matrix = None
+    lines = []
+    with open(filename) as f:
+        for line in f:
+            line = line.rstrip('\n')
+            if line and (line[0] == '-' or ('A' <= line[0] <= 'Z')):
+                line = line.upper()
+                lines.append(line)
+                if first_line is None:
+                    first_line = line
+                    n = len(first_line)
+                    matrix = np.ones((n, n), dtype=float)  # initialize to ones
+    if first_line is None:
+        raise ValueError("No valid lines found in file.")
+    diff_count = np.zeros(n, dtype=float)
+    diff_matrix = np.zeros((n, n), dtype=float)
+    for line in lines[1:]:
+        if len(line) != len(first_line):
+            continue
+        diff_indices = [i for i in range(n) if line[i] != first_line[i]]
+        same_indices = [i for i in range(n) if line[i] == first_line[i]]
+        for i in range(n):
+            if line[i] != first_line[i]:
+                diff_count[i] += 1
+        # Fill diff_matrix: for each i in diff_indices, for each j in same_indices
+        for i in diff_indices:
+            for j in same_indices:
+                diff_matrix[i, j] += 1
+        for i in range(len(same_indices)):
+            for j in range(i+1, len(same_indices)):
+                matrix[same_indices[i]][same_indices[j]] += 1
+                matrix[same_indices[j]][same_indices[i]] += 1
+    return np.array(matrix), diff_count, diff_matrix
+
+
+def generate_matrix_image(filename):
+    """
+    Generate a matplotlib image of the diff_matrix and return it as a base64 encoded string.
+
+    Args:
+        filename: Path to the MSA file
+
+    Returns:
+        str: Base64 encoded PNG image
+    """
+    matrix, diff_count, diff_matrix = build_matrix_from_file(filename)
+
+    # Create the plot
+    plt.figure(figsize=(10, 8))
+    plt.imshow(diff_matrix, cmap='coolwarm', interpolation='nearest')
+    plt.colorbar(label='Normalized Count')
+    plt.title('Matrix Visualization (Element-wise Division by diff_count)')
+    plt.xlabel('Position')
+    plt.ylabel('Position')
+
+    # Save to bytes buffer
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+    plt.close()
+    buf.seek(0)
+
+    # Encode to base64
+    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    return img_base64
 
 
 def needleman_wunsch(seq1, seq2):
@@ -144,6 +225,27 @@ class MSAHandler(BaseHTTPRequestHandler):
 
             # Get the next sequence
             response = self.get_sequence_alignment()
+            self.wfile.write(json.dumps(response).encode())
+
+        elif self.path == '/api/matrix':
+            # API endpoint to get the matrix visualization
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+
+            try:
+                # Generate the matrix image
+                img_base64 = generate_matrix_image('lamprey.a3m')
+                response = {
+                    'success': True,
+                    'image': img_base64
+                }
+            except Exception as e:
+                response = {
+                    'success': False,
+                    'error': str(e)
+                }
+
             self.wfile.write(json.dumps(response).encode())
 
         else:

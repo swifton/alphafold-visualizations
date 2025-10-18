@@ -10,6 +10,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     nextBtn.addEventListener('click', async () => {
         await loadSequences('/api/next');
     });
+
+    // Add event listener to Matrix button
+    const matrixBtn = document.getElementById('matrix-btn');
+    matrixBtn.addEventListener('click', async () => {
+        await loadMatrix();
+    });
 });
 
 async function loadSequences(endpoint) {
@@ -170,4 +176,46 @@ function visualizeAlignment(seq1, seq2, alignment) {
     }
 
     console.log(`Visualized alignment of ${alignment.length} positions`);
+}
+
+async function loadMatrix() {
+    const matrixBtn = document.getElementById('matrix-btn');
+    const spinner = document.getElementById('matrix-spinner');
+    const matrixVisualization = document.getElementById('matrix-visualization');
+    const matrixImg = document.getElementById('matrix-img');
+
+    try {
+        // Disable button and show spinner
+        matrixBtn.disabled = true;
+        spinner.style.display = 'block';
+
+        console.log('Requesting matrix from server...');
+
+        // Make request to server
+        const response = await fetch('/api/matrix');
+
+        if (!response.ok) {
+            throw new Error(`Failed to load matrix: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log('Matrix received');
+
+        if (data.success) {
+            // Display the matrix image
+            matrixImg.src = `data:image/png;base64,${data.image}`;
+            matrixVisualization.style.display = 'block';
+            console.log('Matrix visualization displayed');
+        } else {
+            throw new Error(data.error || 'Failed to generate matrix');
+        }
+
+    } catch (error) {
+        console.error('Error loading matrix:', error);
+        alert(`Error loading matrix: ${error.message}`);
+    } finally {
+        // Re-enable button and hide spinner
+        matrixBtn.disabled = false;
+        spinner.style.display = 'none';
+    }
 }
