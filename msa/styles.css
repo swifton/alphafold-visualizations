@@ -35,14 +35,14 @@ main {
     width: 100%;
 }
 
-#controls {
+#controls, #residue-controls {
     margin: 1rem 0;
     display: flex;
     gap: 1rem;
     align-items: center;
 }
 
-#next-btn, #matrix-btn {
+#next-btn, #matrix-btn, #hydrophobic-btn, #hydrophilic-btn, #clear-highlight-btn {
     background-color: #2c3e50;
     color: white;
     border: none;
@@ -53,17 +53,41 @@ main {
     transition: background-color 0.2s;
 }
 
-#next-btn:hover, #matrix-btn:hover {
+#next-btn:hover, #matrix-btn:hover, #hydrophobic-btn:hover, #hydrophilic-btn:hover, #clear-highlight-btn:hover {
     background-color: #34495e;
 }
 
-#next-btn:active, #matrix-btn:active {
+#next-btn:active, #matrix-btn:active, #hydrophobic-btn:active, #hydrophilic-btn:active, #clear-highlight-btn:active {
     background-color: #1a252f;
 }
 
 #matrix-btn:disabled {
     background-color: #95a5a6;
     cursor: not-allowed;
+}
+
+#hydrophobic-btn {
+    background-color: #e67e22;
+}
+
+#hydrophobic-btn:hover {
+    background-color: #d35400;
+}
+
+#hydrophilic-btn {
+    background-color: #3498db;
+}
+
+#hydrophilic-btn:hover {
+    background-color: #2980b9;
+}
+
+#clear-highlight-btn {
+    background-color: #95a5a6;
+}
+
+#clear-highlight-btn:hover {
+    background-color: #7f8c8d;
 }
 
 .spinner {

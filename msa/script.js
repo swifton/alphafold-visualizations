@@ -16,6 +16,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     matrixBtn.addEventListener('click', async () => {
         await loadMatrix();
     });
+
+    // Add event listeners for residue highlight buttons
+    const hydrophobicBtn = document.getElementById('hydrophobic-btn');
+    hydrophobicBtn.addEventListener('click', () => {
+        highlightResiduesByProperty('hydrophobic');
+    });
+
+    const hydrophilicBtn = document.getElementById('hydrophilic-btn');
+    hydrophilicBtn.addEventListener('click', () => {
+        highlightResiduesByProperty('hydrophilic');
+    });
+
+    const clearHighlightBtn = document.getElementById('clear-highlight-btn');
+    clearHighlightBtn.addEventListener('click', () => {
+        clearHighlightInMolstar();
+    });
 });
 
 async function loadSequences(endpoint) {
@@ -209,6 +225,12 @@ async function loadMatrix() {
 
             matrixVisualization.style.display = 'block';
 
+            // Show residue controls
+            document.getElementById('residue-controls').style.display = 'flex';
+
+            // Fetch reference sequence
+            await fetchReferenceSequence();
+
             // Initialize Mol* viewer
             await initMolstarViewer();
 
@@ -298,6 +320,11 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
 }
 
 let molstarViewer = null;
+let referenceSequence = '';
+
+// Amino acid classifications
+const HYDROPHOBIC_RESIDUES = ['A', 'V', 'I', 'L', 'M', 'F', 'Y', 'W'];
+const HYDROPHILIC_RESIDUES = ['S', 'T', 'N', 'Q', 'C', 'G', 'P', 'R', 'H', 'K', 'D', 'E'];
 
 function renderDiffCountSVG(diffCount, size, minValue, maxValue) {
     const svg = document.getElementById('diff-count-svg');
@@ -478,5 +505,76 @@ async function initMolstarViewer() {
     } catch (error) {
         console.error('Error initializing PDBe Molstar viewer:', error);
         throw error;
+    }
+}
+
+async function fetchReferenceSequence() {
+    try {
+        console.log('Fetching reference sequence...');
+        const response = await fetch('/api/reference-sequence');
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch reference sequence: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            referenceSequence = data.sequence;
+            console.log(`Reference sequence loaded: ${referenceSequence.length} residues`);
+        } else {
+            throw new Error(data.error || 'Failed to load reference sequence');
+        }
+    } catch (error) {
+        console.error('Error fetching reference sequence:', error);
+    }
+}
+
+async function highlightResiduesByProperty(property) {
+    if (!molstarViewer) {
+        console.warn('Molstar viewer not initialized');
+        return;
+    }
+
+    if (!referenceSequence) {
+        console.warn('Reference sequence not loaded');
+        return;
+    }
+
+    try {
+        // Determine which residues to highlight
+        const targetResidues = property === 'hydrophobic' ? HYDROPHOBIC_RESIDUES : HYDROPHILIC_RESIDUES;
+
+        // Find all positions in the reference sequence that match
+        const selections = [];
+        for (let i = 0; i < referenceSequence.length; i++) {
+            const residue = referenceSequence[i];
+            if (targetResidues.includes(residue)) {
+                // PDB residue numbers are 1-indexed
+                const pdbResidue = i + 1;
+                selections.push({
+                    struct_asym_id: 'A',
+                    start_residue_number: pdbResidue,
+                    end_residue_number: pdbResidue,
+                    color: property === 'hydrophobic'
+                        ? { r: 255, g: 126, b: 34 }  // Orange
+                        : { r: 52, g: 152, b: 219 }  // Blue
+                });
+            }
+        }
+
+        // Clear previous selection
+        await molstarViewer.visual.clearSelection();
+
+        // Apply the selection
+        if (selections.length > 0) {
+            await molstarViewer.visual.select({ data: selections });
+            console.log(`Highlighted ${selections.length} ${property} residues`);
+        } else {
+            console.log(`No ${property} residues found`);
+        }
+
+    } catch (error) {
+        console.error(`Error highlighting ${property} residues:`, error);
     }
 }

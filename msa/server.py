@@ -316,6 +316,35 @@ class MSAHandler(BaseHTTPRequestHandler):
 
             self.wfile.write(json.dumps(response).encode())
 
+        elif self.path == '/api/reference-sequence':
+            # API endpoint to get the reference sequence
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+
+            try:
+                # Read the reference sequence from lamprey.a3m (line 3, index 2)
+                with open('lamprey.a3m', 'r') as f:
+                    lines = f.readlines()
+                    if len(lines) > 2:
+                        ref_seq = lines[2].rstrip('\n').replace('-', '')
+                        response = {
+                            'success': True,
+                            'sequence': ref_seq
+                        }
+                    else:
+                        response = {
+                            'success': False,
+                            'error': 'Reference sequence not found'
+                        }
+            except Exception as e:
+                response = {
+                    'success': False,
+                    'error': str(e)
+                }
+
+            self.wfile.write(json.dumps(response).encode())
+
         else:
             self.send_response(404)
             self.end_headers()
