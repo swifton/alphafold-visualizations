@@ -108,7 +108,18 @@ def build_matrix_from_file(filename):
                 matrix[same_indices[i]][same_indices[j]] += 1
                 matrix[same_indices[j]][same_indices[i]] += 1
 
-    return np.array(matrix), diff_count, diff_matrix
+    # Normalize diff_matrix by dividing each entry by the minimum of mutations
+    # between the two residues
+    normalized_diff_matrix = np.zeros_like(diff_matrix)
+    for i in range(n):
+        for j in range(n):
+            min_mutations = min(diff_count[i], diff_count[j])
+            if min_mutations > 0:
+                normalized_diff_matrix[i, j] = diff_matrix[i, j] / min_mutations
+            else:
+                normalized_diff_matrix[i, j] = 0
+
+    return np.array(matrix), diff_count, normalized_diff_matrix
 
 
 def get_matrix_data(filename):
