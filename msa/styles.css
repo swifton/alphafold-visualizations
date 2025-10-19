@@ -154,3 +154,28 @@ main {
     stroke: #000;
     stroke-width: 2;
 }
+
+.matrix-left h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: #2c3e50;
+    font-size: 1rem;
+}
+
+#diff-count-svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    border: 1px solid #ddd;
+    margin-top: 0.5rem;
+}
+
+#diff-count-svg rect {
+    stroke: none;
+}
+
+#diff-count-svg rect:hover {
+    stroke: #000;
+    stroke-width: 2;
+    cursor: pointer;
+}

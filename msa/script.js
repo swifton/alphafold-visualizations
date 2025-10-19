@@ -203,6 +203,10 @@ async function loadMatrix() {
         if (data.success) {
             // Render the matrix as SVG
             renderMatrixSVG(data.matrix, data.size, data.min_value, data.max_value);
+
+            // Render the diff_count visualization
+            renderDiffCountSVG(data.diff_count, data.size, data.diff_count_min, data.diff_count_max);
+
             matrixVisualization.style.display = 'block';
 
             // Initialize Mol* viewer
@@ -294,6 +298,104 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
 }
 
 let molstarViewer = null;
+
+function renderDiffCountSVG(diffCount, size, minValue, maxValue) {
+    const svg = document.getElementById('diff-count-svg');
+    const positionDisplay = document.getElementById('matrix-position');
+
+    // Clear previous content
+    svg.innerHTML = '';
+
+    // Configuration
+    const cellSize = 10; // Match the matrix cell size
+    const cellHeight = 30; // Taller cells for better visibility
+    const width = size * cellSize;
+    const height = cellHeight;
+
+    // Set SVG dimensions
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+    // Create color scale function (same coolwarm as matrix)
+    const getColor = (value) => {
+        // Normalize value to 0-1 range
+        const normalized = (value - minValue) / (maxValue - minValue);
+
+        // Coolwarm colormap: blue (cool) to white to red (warm)
+        if (normalized < 0.5) {
+            // Blue to white
+            const t = normalized * 2;
+            const r = Math.round(59 + (255 - 59) * t);
+            const g = Math.round(76 + (255 - 76) * t);
+            const b = Math.round(192 + (255 - 192) * t);
+            return `rgb(${r}, ${g}, ${b})`;
+        } else {
+            // White to red
+            const t = (normalized - 0.5) * 2;
+            const r = 255;
+            const g = Math.round(255 - 255 * t);
+            const b = Math.round(255 - 89 * t);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+    };
+
+    // Render each cell
+    for (let i = 0; i < size; i++) {
+        const value = diffCount[i];
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+
+        rect.setAttribute('x', i * cellSize);
+        rect.setAttribute('y', 0);
+        rect.setAttribute('width', cellSize);
+        rect.setAttribute('height', cellHeight);
+        rect.setAttribute('fill', getColor(value));
+
+        // Add hover event to display position and highlight in Molstar
+        rect.addEventListener('mouseenter', () => {
+            positionDisplay.textContent = `Residue: ${i} Mutations: ${value.toFixed(2)}`;
+            highlightSingleResidueInMolstar(i);
+        });
+
+        rect.addEventListener('mouseleave', () => {
+            positionDisplay.textContent = '';
+            clearHighlightInMolstar();
+        });
+
+        svg.appendChild(rect);
+    }
+
+    console.log(`Rendered diff_count with ${size} residues`);
+}
+
+async function highlightSingleResidueInMolstar(residue) {
+    if (!molstarViewer) return;
+
+    try {
+        // PDB residue numbers are 1-indexed, matrix indices are 0-indexed
+        const pdbResidue = residue + 1;
+
+        // Clear previous selection
+        await molstarViewer.visual.clearSelection();
+
+        // Select the single residue with yellow highlighting
+        const selections = [
+            {
+                struct_asym_id: 'A',
+                start_residue_number: pdbResidue,
+                end_residue_number: pdbResidue,
+                color: { r: 255, g: 255, b: 0 }
+            }
+        ];
+
+        await molstarViewer.visual.select({ data: selections });
+
+        console.log(`Highlighted residue ${pdbResidue} in PDBe Molstar`);
+
+    } catch (error) {
+        console.error('Error highlighting residue in PDBe Molstar:', error);
+    }
+}
 
 async function highlightResiduesInMolstar(residue1, residue2) {
     if (!molstarViewer) return;

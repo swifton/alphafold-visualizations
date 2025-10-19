@@ -141,14 +141,22 @@ def get_matrix_data(filename):
     min_val = float(np.min(diff_matrix))
     max_val = float(np.max(diff_matrix))
 
+    # Get min and max for diff_count
+    diff_count_min = float(np.min(diff_count))
+    diff_count_max = float(np.max(diff_count))
+
     # Convert matrix to list for JSON serialization
     matrix_data = diff_matrix.tolist()
+    diff_count_data = diff_count.tolist()
 
     return {
         'matrix': matrix_data,
         'size': matrix_size,
         'min_value': min_val,
-        'max_value': max_val
+        'max_value': max_val,
+        'diff_count': diff_count_data,
+        'diff_count_min': diff_count_min,
+        'diff_count_max': diff_count_max
     }
 
 
