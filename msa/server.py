@@ -97,9 +97,10 @@ def build_matrix_from_file(filename):
             diff_count[i] += 1
 
         # Fill diff_matrix: for each i in diff_indices, for each j in same_indices
-        for i in diff_indices:
-            for j in same_indices:
-                diff_matrix[i, j] += 1
+        for i in range(len(diff_indices)):
+            for j in range(i+1, len(diff_indices)):
+                diff_matrix[diff_indices[i]][diff_indices[j]] += 1
+                diff_matrix[diff_indices[j]][diff_indices[i]] += 1
 
         # Fill matrix: for pairs of same_indices
         for i in range(len(same_indices)):
