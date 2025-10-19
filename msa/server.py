@@ -66,6 +66,8 @@ def build_matrix_from_file(filename):
     diff_count = np.zeros(n, dtype=float)
     diff_matrix = np.zeros((n, n), dtype=float)
 
+    total_sequences = len(lines) - 1
+
     # Process each sequence (skip the first one since it's the reference)
     for line in lines[1:]:
         # Align the current sequence with the first sequence
@@ -108,16 +110,25 @@ def build_matrix_from_file(filename):
                 matrix[same_indices[i]][same_indices[j]] += 1
                 matrix[same_indices[j]][same_indices[i]] += 1
 
-    # Normalize diff_matrix by dividing each entry by the minimum of mutations
-    # between the two residues
+    # Normalize using the new formula:
+    # normalized[i,j] = (count[i,j] / N) - (mutations[i] * mutations[j] / N^2)
+    # where N = total_sequences
+    # This gives the correlation adjusted for individual mutation frequencies
     normalized_diff_matrix = np.zeros_like(diff_matrix)
     for i in range(n):
         for j in range(n):
-            min_mutations = min(diff_count[i], diff_count[j])
-            if min_mutations > 0:
-                normalized_diff_matrix[i, j] = diff_matrix[i, j] / min_mutations
-            else:
+            if i == j:
+                # Set diagonal elements to zero
                 normalized_diff_matrix[i, j] = 0
+            else:
+                # First term: observed co-mutation frequency
+                observed = diff_matrix[i, j] / total_sequences
+
+                # Second term: expected co-mutation if mutations were independent
+                expected = (diff_count[i] * diff_count[j]) / (total_sequences ** 2)
+
+                # Normalized value = observed - expected
+                normalized_diff_matrix[i, j] = observed - expected
 
     return np.array(matrix), diff_count, normalized_diff_matrix
 
@@ -137,9 +148,13 @@ def get_matrix_data(filename):
     # Get matrix dimensions
     matrix_size = diff_matrix.shape[0]
 
-    # Get min and max values for color scaling
-    min_val = float(np.min(diff_matrix))
-    max_val = float(np.max(diff_matrix))
+    # Get min and max values for color scaling, excluding diagonal elements
+    # Create a mask for non-diagonal elements
+    non_diagonal_mask = ~np.eye(matrix_size, dtype=bool)
+    non_diagonal_values = diff_matrix[non_diagonal_mask]
+
+    min_val = float(np.min(non_diagonal_values))
+    max_val = float(np.max(non_diagonal_values))
 
     # Get min and max for diff_count
     diff_count_min = float(np.min(diff_count))
