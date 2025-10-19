@@ -275,13 +275,15 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
             rect.setAttribute('height', cellSize);
             rect.setAttribute('fill', getColor(value));
 
-            // Add hover event to display position
+            // Add hover event to display position and highlight in Mol*
             rect.addEventListener('mouseenter', () => {
                 positionDisplay.textContent = `Position: (${row}, ${col}) Value: ${value.toFixed(2)}`;
+                highlightResiduesInMolstar(row, col);
             });
 
             rect.addEventListener('mouseleave', () => {
                 positionDisplay.textContent = '';
+                clearHighlightInMolstar();
             });
 
             svg.appendChild(rect);
@@ -293,40 +295,86 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
 
 let molstarViewer = null;
 
+async function highlightResiduesInMolstar(residue1, residue2) {
+    if (!molstarViewer) return;
+
+    try {
+        // PDB residue numbers are 1-indexed, matrix indices are 0-indexed
+        const pdbResidue1 = residue1 + 1;
+        const pdbResidue2 = residue2 + 1;
+
+        // PDBe Molstar uses a simple selection API
+        // Clear previous selection
+        await molstarViewer.visual.clearSelection();
+
+        // Select both residues with yellow highlighting
+        const selections = [
+            {
+                struct_asym_id: 'A',
+                start_residue_number: pdbResidue1,
+                end_residue_number: pdbResidue1,
+                color: { r: 255, g: 255, b: 0 }
+            },
+            {
+                struct_asym_id: 'A',
+                start_residue_number: pdbResidue2,
+                end_residue_number: pdbResidue2,
+                color: { r: 255, g: 255, b: 0 }
+            }
+        ];
+
+        await molstarViewer.visual.select({ data: selections });
+    } catch (error) {
+        console.error('Error highlighting residues in PDBe Molstar:', error);
+    }
+}
+
+async function clearHighlightInMolstar() {
+    if (!molstarViewer) return;
+
+    try {
+        await molstarViewer.visual.clearSelection();
+    } catch (error) {
+        console.error('Error clearing highlight in PDBe Molstar:', error);
+    }
+}
+
 async function initMolstarViewer() {
     // Don't reinitialize if already created
     if (molstarViewer) {
-        console.log('Mol* viewer already initialized');
+        console.log('PDBe Molstar viewer already initialized');
         return;
     }
 
     const viewerElement = document.getElementById('molstar-viewer');
 
     try {
-        console.log('Initializing Mol* viewer...');
+        console.log('Initializing PDBe Molstar viewer...');
 
-        // Create the Mol* viewer instance
-        molstarViewer = await molstar.Viewer.create(viewerElement, {
-            layoutIsExpanded: false,
-            layoutShowControls: false,
-            layoutShowRemoteState: false,
-            layoutShowSequence: false,
-            layoutShowLog: false,
-            layoutShowLeftPanel: false,
-            viewportShowExpand: false,
-            viewportShowSelectionMode: false,
-            viewportShowAnimation: false,
-        });
+        // Create the PDBe Molstar viewer instance
+        const viewerInstance = new PDBeMolstarPlugin();
 
-        console.log('Mol* viewer created, loading structure...');
+        // Initialize with options
+        const options = {
+            customData: {
+                url: '/lamprey.pdb',
+                format: 'pdb'
+            },
+            hideControls: true,
+            hideCanvasControls: ['expand', 'selection', 'animation'],
+            sequencePanel: true,
+            pdbeUrl: window.location.origin,
+            expanded: false,
+            landscape: false
+        };
 
-        // Load the PDB file
-        await molstarViewer.loadStructureFromUrl('/lamprey.pdb', 'pdb', false);
+        await viewerInstance.render(viewerElement, options);
+        molstarViewer = viewerInstance;
 
-        console.log('Structure loaded successfully');
+        console.log('PDBe Molstar viewer initialized and structure loaded');
 
     } catch (error) {
-        console.error('Error initializing Mol* viewer:', error);
+        console.error('Error initializing PDBe Molstar viewer:', error);
         throw error;
     }
 }
