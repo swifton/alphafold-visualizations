@@ -33,14 +33,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Add event listeners for residue highlight buttons
-    const hydrophobicBtn = document.getElementById('hydrophobic-btn');
-    hydrophobicBtn.addEventListener('click', () => {
-        highlightResiduesByProperty('hydrophobic');
+    const positiveBtn = document.getElementById('positive-btn');
+    positiveBtn.addEventListener('click', () => {
+        highlightResiduesByProperty('positive');
     });
 
-    const hydrophilicBtn = document.getElementById('hydrophilic-btn');
-    hydrophilicBtn.addEventListener('click', () => {
-        highlightResiduesByProperty('hydrophilic');
+    const negativeBtn = document.getElementById('negative-btn');
+    negativeBtn.addEventListener('click', () => {
+        highlightResiduesByProperty('negative');
     });
 
     const clearHighlightBtn = document.getElementById('clear-highlight-btn');
@@ -345,9 +345,9 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
 let molstarViewer = null;
 let referenceSequence = '';
 
-// Amino acid classifications
-const HYDROPHOBIC_RESIDUES = ['A', 'V', 'I', 'L', 'M', 'F', 'Y', 'W'];
-const HYDROPHILIC_RESIDUES = ['S', 'T', 'N', 'Q', 'C', 'G', 'P', 'R', 'H', 'K', 'D', 'E'];
+// Amino acid classifications by charge
+const POSITIVE_RESIDUES = ['R', 'H', 'K'];  // Arginine, Histidine, Lysine
+const NEGATIVE_RESIDUES = ['D', 'E'];  // Aspartic acid, Glutamic acid
 
 function renderDiffCountSVG(diffCount, size, minValue, maxValue) {
     const svg = document.getElementById('diff-count-svg');
@@ -566,7 +566,7 @@ async function highlightResiduesByProperty(property) {
 
     try {
         // Determine which residues to highlight
-        const targetResidues = property === 'hydrophobic' ? HYDROPHOBIC_RESIDUES : HYDROPHILIC_RESIDUES;
+        const targetResidues = property === 'positive' ? POSITIVE_RESIDUES : NEGATIVE_RESIDUES;
 
         // Find all positions in the reference sequence that match
         const selections = [];
@@ -579,9 +579,9 @@ async function highlightResiduesByProperty(property) {
                     struct_asym_id: 'A',
                     start_residue_number: pdbResidue,
                     end_residue_number: pdbResidue,
-                    color: property === 'hydrophobic'
-                        ? { r: 255, g: 126, b: 34 }  // Orange
-                        : { r: 52, g: 152, b: 219 }  // Blue
+                    color: property === 'positive'
+                        ? { r: 52, g: 152, b: 219 }  // Blue for positive charge
+                        : { r: 231, g: 76, b: 60 }  // Red for negative charge
                 });
             }
         }
@@ -592,12 +592,12 @@ async function highlightResiduesByProperty(property) {
         // Apply the selection
         if (selections.length > 0) {
             await molstarViewer.visual.select({ data: selections });
-            console.log(`Highlighted ${selections.length} ${property} residues`);
+            console.log(`Highlighted ${selections.length} ${property} charged residues`);
         } else {
-            console.log(`No ${property} residues found`);
+            console.log(`No ${property} charged residues found`);
         }
 
     } catch (error) {
-        console.error(`Error highlighting ${property} residues:`, error);
+        console.error(`Error highlighting ${property} charged residues:`, error);
     }
 }
