@@ -99,6 +99,7 @@ function visualizeAlignment(seq1, seq2, alignment) {
     const color2 = '#1f77b4';  // Blue for sequence 2
     const mismatchColor = '#d62728';  // Red for mismatches
     const gapColor = '#e0e0e0'; // Light gray for gaps
+    const deletionColor = '#f1c40f'; // Yellow for deletions from sequence 1
 
     // Calculate dimensions (two rows)
     const width = alignment.length * (boxSize + padding);
@@ -120,7 +121,9 @@ function visualizeAlignment(seq1, seq2, alignment) {
 
         // Check if this is a mismatch (both have amino acids but they're different)
         const isMismatch = idx1 !== -1 && idx2 !== -1 && seq1_clean[idx1] !== seq2_clean[idx2];
-
+        // Check if this is a deletion from sequence 1 (gap in seq2, residue in seq1)
+        const isDeletion = idx1 !== -1 && idx2 === -1;
+        
         // Draw sequence 1 box (top row)
         const g1 = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         const rect1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -138,6 +141,10 @@ function visualizeAlignment(seq1, seq2, alignment) {
             // Mismatch - use red
             rect1.setAttribute('fill', mismatchColor);
             rect1.setAttribute('stroke', '#333');
+        } else if (isDeletion) {
+            // Deletion from sequence 1 (gap in seq1, residue in seq2) - use yellow
+            rect1.setAttribute('fill', deletionColor);
+            rect1.setAttribute('stroke', '#333');
         } else {
             // Match - use normal color
             rect1.setAttribute('fill', color1);
@@ -154,7 +161,8 @@ function visualizeAlignment(seq1, seq2, alignment) {
             text1.setAttribute('y', boxSize / 2);
             text1.setAttribute('text-anchor', 'middle');
             text1.setAttribute('dominant-baseline', 'central');
-            text1.setAttribute('fill', 'white');
+            // Use dark text for yellow background, white for others
+            text1.setAttribute('fill', isDeletion ? '#333' : 'white');
             text1.setAttribute('font-size', '14px');
             text1.setAttribute('font-weight', 'bold');
             text1.setAttribute('font-family', 'monospace');
