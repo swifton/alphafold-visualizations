@@ -140,6 +140,8 @@ main {
 .matrix-right {
     flex: 1;
     min-height: 600px;
+    display: flex;
+    flex-direction: column;
 }
 
 #molstar-viewer {
@@ -148,6 +150,11 @@ main {
     position: relative;
     border: 1px solid #ddd;
     border-radius: 4px;
+}
+
+.matrix-right #residue-controls {
+    margin-top: 1rem;
+    justify-content: center;
 }
 
 .msp-viewport-controls { display: none !important; }
