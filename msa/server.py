@@ -5,10 +5,11 @@ Minimal web server for MSA visualization
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import os
+import random
 import numpy as np
 
 # Configuration
-PROTEIN_NAME = 'ww-domains'
+PROTEIN_NAME = 'lamprey'
 
 
 def align_sequences(seq1, seq2):
@@ -285,6 +286,19 @@ class MSAHandler(BaseHTTPRequestHandler):
             response = self.get_sequence_alignment()
             self.wfile.write(json.dumps(response).encode())
 
+        elif self.path == '/api/previous':
+            # API endpoint to get the previous sequence
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+
+            # Decrement the sequence index
+            MSAHandler.current_sequence_index -= 1
+
+            # Get the previous sequence
+            response = self.get_sequence_alignment()
+            self.wfile.write(json.dumps(response).encode())
+
         elif self.path == '/api/next':
             # API endpoint to get the next sequence
             self.send_response(200)
@@ -295,6 +309,25 @@ class MSAHandler(BaseHTTPRequestHandler):
             MSAHandler.current_sequence_index += 1
 
             # Get the next sequence
+            response = self.get_sequence_alignment()
+            self.wfile.write(json.dumps(response).encode())
+
+        elif self.path == '/api/random':
+            # API endpoint to get a random sequence
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+
+            # Set a random sequence index
+            # First, we need to know the total number of sequences
+            with open(f'{PROTEIN_NAME}.a3m', 'r') as f:
+                lines = f.readlines()
+                total_sequences = (len(lines) - 3) // 2
+
+            # Generate random index
+            MSAHandler.current_sequence_index = random.randint(0, total_sequences - 1)
+
+            # Get the random sequence
             response = self.get_sequence_alignment()
             self.wfile.write(json.dumps(response).encode())
 
@@ -379,10 +412,14 @@ class MSAHandler(BaseHTTPRequestHandler):
             # Count total sequences (every other line starting from line 7)
             total_sequences = (total_lines - 3) // 2
 
-            # Check if we've gone past the end, wrap around
+            # Check if we've gone past the end, wrap around to the beginning
             if MSAHandler.current_sequence_index >= total_sequences:
                 MSAHandler.current_sequence_index = 0
-                target_line_index = 6
+                target_line_index = 4
+            # Check if we've gone before the beginning, wrap around to the end
+            elif MSAHandler.current_sequence_index < 0:
+                MSAHandler.current_sequence_index = total_sequences - 1
+                target_line_index = 4 + (MSAHandler.current_sequence_index * 2)
 
             # Get the target sequence
             if target_line_index < total_lines:

@@ -8,10 +8,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load initial sequences
     await loadSequences('/api/msa');
 
+    // Add event listener to Previous button
+    const previousBtn = document.getElementById('previous-btn');
+    previousBtn.addEventListener('click', async () => {
+        await loadSequences('/api/previous');
+    });
+
     // Add event listener to Next button
     const nextBtn = document.getElementById('next-btn');
     nextBtn.addEventListener('click', async () => {
         await loadSequences('/api/next');
+    });
+
+    // Add event listener to Random button
+    const randomBtn = document.getElementById('random-btn');
+    randomBtn.addEventListener('click', async () => {
+        await loadSequences('/api/random');
     });
 
     // Add event listener to Matrix button
