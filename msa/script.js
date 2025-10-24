@@ -1,3 +1,6 @@
+// Configuration
+const CELL_SIZE = 10
+
 // Main application script
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('MSA Visualizations app loaded');
@@ -257,7 +260,7 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
     svg.innerHTML = '';
 
     // Configuration
-    const cellSize = 10; // Size of each cell in pixels
+    const cellSize = CELL_SIZE; // Size of each cell in pixels
     const width = size * cellSize;
     const height = size * cellSize;
 
@@ -334,7 +337,7 @@ function renderDiffCountSVG(diffCount, size, minValue, maxValue) {
     svg.innerHTML = '';
 
     // Configuration
-    const cellSize = 10; // Match the matrix cell size
+    const cellSize = CELL_SIZE;
     const cellHeight = 30; // Taller cells for better visibility
     const width = size * cellSize;
     const height = cellHeight;
@@ -486,7 +489,7 @@ async function initMolstarViewer() {
         // Initialize with options
         const options = {
             customData: {
-                url: '/lamprey.pdb',
+                url: `/pdb`,
                 format: 'pdb'
             },
             hideControls: true,

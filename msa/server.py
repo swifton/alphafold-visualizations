@@ -7,6 +7,9 @@ import json
 import os
 import numpy as np
 
+# Configuration
+PROTEIN_NAME = 'ww-domains'
+
 
 def align_sequences(seq1, seq2):
     """
@@ -263,13 +266,13 @@ class MSAHandler(BaseHTTPRequestHandler):
             with open('script.js', 'rb') as f:
                 self.wfile.write(f.read())
 
-        elif self.path == '/lamprey.pdb':
+        elif self.path == f'/pdb':
             # Serve PDB file
             self.send_response(200)
             self.send_header('Content-type', 'chemical/x-pdb')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            with open('lamprey.pdb', 'rb') as f:
+            with open(f'{PROTEIN_NAME}.pdb', 'rb') as f:
                 self.wfile.write(f.read())
 
         elif self.path == '/api/msa':
@@ -303,7 +306,7 @@ class MSAHandler(BaseHTTPRequestHandler):
 
             try:
                 # Get the matrix data
-                matrix_data = get_matrix_data('lamprey.a3m')
+                matrix_data = get_matrix_data(f'{PROTEIN_NAME}.a3m')
                 response = {
                     'success': True,
                     **matrix_data
@@ -323,8 +326,8 @@ class MSAHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             try:
-                # Read the reference sequence from lamprey.a3m (line 3, index 2)
-                with open('lamprey.a3m', 'r') as f:
+                # Read the reference sequence from .a3m file (line 3, index 2)
+                with open(f'{PROTEIN_NAME}.a3m', 'r') as f:
                     lines = f.readlines()
                     if len(lines) > 2:
                         ref_seq = lines[2].rstrip('\n').replace('-', '')
@@ -365,7 +368,7 @@ class MSAHandler(BaseHTTPRequestHandler):
         # Sequence lines are at indices: 2 (reference), 4, 6, 8, 10, 12, ...
         target_line_index = 4 + (MSAHandler.current_sequence_index * 2)
 
-        with open('lamprey.a3m', 'r') as f:
+        with open(f'{PROTEIN_NAME}.a3m', 'r') as f:
             lines = f.readlines()
             total_lines = len(lines)
 
@@ -395,7 +398,7 @@ class MSAHandler(BaseHTTPRequestHandler):
         alignment = align_sequences(seq1, seq2)
 
         return {
-            'filename': 'lamprey.a3m',
+            'filename': f'{PROTEIN_NAME}.a3m',
             'seq1': seq1,
             'seq2': seq2,
             'seq2_header': seq2_header,
