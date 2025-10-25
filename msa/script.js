@@ -5,6 +5,32 @@ const CELL_SIZE = 10
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('MSA Visualizations app loaded');
 
+    // Set up tab switching
+    const alignmentTab = document.getElementById('alignment-tab');
+    const correlationTab = document.getElementById('correlation-tab');
+    const alignmentContent = document.getElementById('alignment-content');
+    const correlationContent = document.getElementById('correlation-content');
+
+    alignmentTab.addEventListener('click', () => {
+        // Switch to alignment tab
+        alignmentTab.classList.add('active');
+        correlationTab.classList.remove('active');
+        alignmentContent.classList.add('active');
+        correlationContent.classList.remove('active');
+        alignmentContent.style.display = 'block';
+        correlationContent.style.display = 'none';
+    });
+
+    correlationTab.addEventListener('click', () => {
+        // Switch to correlation tab
+        correlationTab.classList.add('active');
+        alignmentTab.classList.remove('active');
+        correlationContent.classList.add('active');
+        alignmentContent.classList.remove('active');
+        correlationContent.style.display = 'block';
+        alignmentContent.style.display = 'none';
+    });
+
     // Load initial sequences
     await loadSequences('/api/msa');
 
@@ -246,8 +272,9 @@ async function loadMatrix() {
             // Render the diff_count visualization
             renderDiffCountSVG(data.diff_count, data.size, data.diff_count_min, data.diff_count_max);
 
-            // Render the alignment quality plot
+            // Render the alignment quality plot in the alignment tab
             renderAlignmentQualityPlot(data.alignment_quality);
+            document.getElementById('alignment-quality-container').style.display = 'block';
 
             matrixVisualization.style.display = 'block';
 

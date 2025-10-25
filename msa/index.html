@@ -18,36 +18,48 @@
                 <h2>MSA Sequence Visualization</h2>
                 <p>Loading lamprey.a3m...</p>
             </div>
-            <div id="controls">
-                <button id="previous-btn">Previous</button>
-                <button id="next-btn">Next</button>
-                <button id="random-btn">Random</button>
-                <button id="matrix-btn">Show Matrix</button>
-                <div id="matrix-spinner" class="spinner" style="display: none;"></div>
+            <div id="tabs">
+                <button id="alignment-tab" class="tab-button active">Alignment</button>
+                <button id="correlation-tab" class="tab-button">Correlation</button>
             </div>
-            <div id="visualization">
-                <svg id="sequence-viz"></svg>
-            </div>
-            <div id="matrix-visualization" style="display: none;">
-                <h2>Difference Matrix</h2>
-                <div class="matrix-container">
-                    <div class="matrix-left">
-                        <svg id="matrix-svg"></svg>
-                        <svg id="diff-count-svg"></svg>
-                        <div id="matrix-position" class="matrix-position"></div>
-                    </div>
-                    <div class="matrix-right">
-                        <div id="molstar-viewer"></div>
-                        <div id="residue-controls" style="display: none;">
-                            <button id="positive-btn">Highlight Positive</button>
-                            <button id="negative-btn">Highlight Negative</button>
-                            <button id="clear-highlight-btn">Clear Highlight</button>
-                        </div>
-                    </div>
+
+            <div id="alignment-content" class="tab-content active">
+                <div id="controls">
+                    <button id="previous-btn">Previous</button>
+                    <button id="next-btn">Next</button>
+                    <button id="random-btn">Random</button>
                 </div>
-                <div id="alignment-quality-container">
+                <div id="visualization">
+                    <svg id="sequence-viz"></svg>
+                </div>
+                <div id="alignment-quality-container" style="display: none;">
                     <h3>Alignment Quality</h3>
                     <svg id="alignment-quality-plot"></svg>
+                </div>
+            </div>
+
+            <div id="correlation-content" class="tab-content" style="display: none;">
+                <div id="controls-correlation">
+                    <button id="matrix-btn">Show Matrix</button>
+                    <div id="matrix-spinner" class="spinner" style="display: none;"></div>
+                </div>
+                <div id="matrix-visualization" style="display: none;">
+                    <h2>Difference Matrix</h2>
+                    <div class="matrix-container">
+                        <div class="matrix-left">
+                            <svg id="matrix-svg"></svg>
+                            <svg id="diff-count-svg"></svg>
+                            <div id="matrix-position" class="matrix-position"></div>
+                        </div>
+                        <div class="matrix-right">
+                            <div id="molstar-viewer"></div>
+                            <div id="residue-controls" style="display: none;">
+                                <button id="positive-btn">Highlight Positive</button>
+                                <button id="negative-btn">Highlight Negative</button>
+                                <button id="clear-highlight-btn">Clear Highlight</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
