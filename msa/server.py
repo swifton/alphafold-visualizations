@@ -69,6 +69,7 @@ def build_matrix_from_file(filename):
 
     diff_count = np.zeros(n, dtype=float)
     diff_matrix = np.zeros((n, n), dtype=float)
+    alignment_quality = []  # Track number of properly aligned residues per sequence
 
     total_sequences = len(lines) - 1
 
@@ -84,6 +85,7 @@ def build_matrix_from_file(filename):
         # Track which positions in the first sequence are different/same
         diff_indices = []
         same_indices = []
+        aligned_count = 0  # Count properly aligned residues (matching positions)
 
         for idx1, idx2 in alignment:
             # Both positions have amino acids (not gaps)
@@ -94,9 +96,13 @@ def build_matrix_from_file(filename):
                 else:
                     # Same amino acids at aligned positions
                     same_indices.append(idx1)
+                    aligned_count += 1  # Count as properly aligned
             elif idx1 != -1:
                 # Gap in the aligned sequence (deletion) - treat as difference
                 diff_indices.append(idx1)
+
+        # Save the alignment quality for this sequence
+        alignment_quality.append(aligned_count)
 
         # Update diff_count for positions that differ
         for i in diff_indices:
@@ -134,7 +140,7 @@ def build_matrix_from_file(filename):
                 # Normalized value = observed - expected
                 normalized_diff_matrix[i, j] = observed - expected
 
-    return np.array(matrix), diff_count, normalized_diff_matrix
+    return np.array(matrix), diff_count, normalized_diff_matrix, alignment_quality
 
 
 def get_matrix_data(filename):
@@ -147,7 +153,7 @@ def get_matrix_data(filename):
     Returns:
         dict: Dictionary containing matrix data and metadata
     """
-    matrix, diff_count, diff_matrix = build_matrix_from_file(filename)
+    matrix, diff_count, diff_matrix, alignment_quality = build_matrix_from_file(filename)
 
     # Get matrix dimensions
     matrix_size = diff_matrix.shape[0]
@@ -175,7 +181,8 @@ def get_matrix_data(filename):
         'max_value': max_val,
         'diff_count': diff_count_data,
         'diff_count_min': diff_count_min,
-        'diff_count_max': diff_count_max
+        'diff_count_max': diff_count_max,
+        'alignment_quality': alignment_quality
     }
 
 

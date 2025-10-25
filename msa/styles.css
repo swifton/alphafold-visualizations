@@ -210,3 +210,25 @@ main {
     stroke-width: 2;
     cursor: pointer;
 }
+
+#alignment-quality-container {
+    margin-top: 2rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+#alignment-quality-container h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+#alignment-quality-plot {
+    width: 100%;
+    height: 300px;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}

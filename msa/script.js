@@ -246,6 +246,9 @@ async function loadMatrix() {
             // Render the diff_count visualization
             renderDiffCountSVG(data.diff_count, data.size, data.diff_count_min, data.diff_count_max);
 
+            // Render the alignment quality plot
+            renderAlignmentQualityPlot(data.alignment_quality);
+
             matrixVisualization.style.display = 'block';
 
             // Show residue controls
@@ -600,4 +603,124 @@ async function highlightResiduesByProperty(property) {
     } catch (error) {
         console.error(`Error highlighting ${property} charged residues:`, error);
     }
+}
+
+function renderAlignmentQualityPlot(alignmentQuality) {
+    const svg = document.getElementById('alignment-quality-plot');
+
+    // Clear previous content
+    svg.innerHTML = '';
+
+    if (!alignmentQuality || alignmentQuality.length === 0) {
+        console.warn('No alignment quality data to plot');
+        return;
+    }
+
+    // Configuration
+    const width = 800;
+    const height = 300;
+    const margin = { top: 20, right: 30, bottom: 40, left: 60 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+
+    // Set SVG dimensions
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+    // Find min and max values for scaling
+    const minValue = Math.min(...alignmentQuality);
+    const maxValue = Math.max(...alignmentQuality);
+    const numSequences = alignmentQuality.length;
+
+    // Create scales
+    const xScale = (index) => margin.left + (index / (numSequences - 1)) * plotWidth;
+    const yScale = (value) => margin.top + plotHeight - ((value - minValue) / (maxValue - minValue)) * plotHeight;
+
+    // Create background
+    const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bgRect.setAttribute('x', margin.left);
+    bgRect.setAttribute('y', margin.top);
+    bgRect.setAttribute('width', plotWidth);
+    bgRect.setAttribute('height', plotHeight);
+    bgRect.setAttribute('fill', '#f9f9f9');
+    bgRect.setAttribute('stroke', '#ddd');
+    svg.appendChild(bgRect);
+
+    // Draw grid lines
+    const numGridLines = 5;
+    for (let i = 0; i <= numGridLines; i++) {
+        const y = margin.top + (i / numGridLines) * plotHeight;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', margin.left);
+        line.setAttribute('x2', margin.left + plotWidth);
+        line.setAttribute('y1', y);
+        line.setAttribute('y2', y);
+        line.setAttribute('stroke', '#ddd');
+        line.setAttribute('stroke-width', '1');
+        svg.appendChild(line);
+
+        // Add y-axis labels
+        const value = maxValue - (i / numGridLines) * (maxValue - minValue);
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', margin.left - 10);
+        label.setAttribute('y', y);
+        label.setAttribute('text-anchor', 'end');
+        label.setAttribute('dominant-baseline', 'middle');
+        label.setAttribute('font-size', '12px');
+        label.setAttribute('fill', '#666');
+        label.textContent = Math.round(value);
+        svg.appendChild(label);
+    }
+
+    // Add dots at data points (point plot, no connecting lines)
+    for (let i = 0; i < alignmentQuality.length; i++) {
+        const x = xScale(i);
+        const y = yScale(alignmentQuality[i]);
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', x);
+        circle.setAttribute('cy', y);
+        circle.setAttribute('r', '2');
+        circle.setAttribute('fill', '#2c3e50');
+        circle.setAttribute('opacity', '0.6');
+
+        // Add hover effect with tooltip
+        circle.addEventListener('mouseenter', function() {
+            this.setAttribute('r', '4');
+            this.setAttribute('fill', '#3498db');
+            this.setAttribute('opacity', '1');
+        });
+
+        circle.addEventListener('mouseleave', function() {
+            this.setAttribute('r', '2');
+            this.setAttribute('fill', '#2c3e50');
+            this.setAttribute('opacity', '0.6');
+        });
+
+        svg.appendChild(circle);
+    }
+
+    // Add x-axis label
+    const xAxisLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    xAxisLabel.setAttribute('x', margin.left + plotWidth / 2);
+    xAxisLabel.setAttribute('y', height - 5);
+    xAxisLabel.setAttribute('text-anchor', 'middle');
+    xAxisLabel.setAttribute('font-size', '14px');
+    xAxisLabel.setAttribute('fill', '#333');
+    xAxisLabel.textContent = 'Sequence Index';
+    svg.appendChild(xAxisLabel);
+
+    // Add y-axis label
+    const yAxisLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    yAxisLabel.setAttribute('x', -margin.top - plotHeight / 2);
+    yAxisLabel.setAttribute('y', 15);
+    yAxisLabel.setAttribute('text-anchor', 'middle');
+    yAxisLabel.setAttribute('font-size', '14px');
+    yAxisLabel.setAttribute('fill', '#333');
+    yAxisLabel.setAttribute('transform', `rotate(-90, ${15}, ${margin.top + plotHeight / 2})`);
+    yAxisLabel.textContent = 'Properly Aligned Residues';
+    svg.appendChild(yAxisLabel);
+
+    console.log(`Rendered alignment quality plot with ${alignmentQuality.length} sequences`);
 }
