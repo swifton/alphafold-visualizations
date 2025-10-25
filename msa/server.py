@@ -137,8 +137,14 @@ def build_matrix_from_file(filename):
                 # Second term: expected co-mutation if mutations were independent
                 expected = (diff_count[i] * diff_count[j]) / (total_sequences ** 2)
 
+                # Variances
+                mean_i = diff_count[i] / total_sequences
+                mean_j = diff_count[j] / total_sequences
+                var_i = (mean_i - mean_i ** 2)
+                var_j = (mean_j - mean_j ** 2)
+
                 # Normalized value = observed - expected
-                normalized_diff_matrix[i, j] = observed - expected
+                normalized_diff_matrix[i, j] = (observed - expected) / (var_i * var_j)
 
     return np.array(matrix), diff_count, normalized_diff_matrix, alignment_quality
 
