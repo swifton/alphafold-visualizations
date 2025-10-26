@@ -65,12 +65,8 @@ def build_matrix_from_file(filename):
     Build diff_matrix by tracking which letters in sequences were changed
     compared to the first sequence. Uses Needleman-Wunsch alignment to handle
     sequences of different lengths.
-
-    Returns:
-        tuple: (matrix, diff_count, diff_matrix)
     """
     first_line = None
-    matrix = None
     lines = []
     with open(filename) as f:
         for line in f:
@@ -83,7 +79,6 @@ def build_matrix_from_file(filename):
                     # Get the length of the first sequence (without gaps)
                     first_clean = first_line.replace('-', '')
                     n = len(first_clean)
-                    matrix = np.ones((n, n), dtype=float)  # initialize to ones
     if first_line is None:
         raise ValueError("No valid lines found in file.")
 
@@ -134,12 +129,6 @@ def build_matrix_from_file(filename):
                 diff_matrix[diff_indices[i]][diff_indices[j]] += 1
                 diff_matrix[diff_indices[j]][diff_indices[i]] += 1
 
-        # Fill matrix: for pairs of same_indices
-        for i in range(len(same_indices)):
-            for j in range(i+1, len(same_indices)):
-                matrix[same_indices[i]][same_indices[j]] += 1
-                matrix[same_indices[j]][same_indices[i]] += 1
-
     # Normalize using the new formula:
     # normalized[i,j] = (count[i,j] / N) - (mutations[i] * mutations[j] / N^2)
     # where N = total_sequences
@@ -166,7 +155,7 @@ def build_matrix_from_file(filename):
                 # Normalized value = observed - expected
                 normalized_diff_matrix[i, j] = (observed - expected) / (var_i * var_j)
 
-    return np.array(matrix), diff_count, normalized_diff_matrix, alignment_quality
+    return diff_count, normalized_diff_matrix, alignment_quality
 
 
 def get_matrix_data(filename):
@@ -179,7 +168,7 @@ def get_matrix_data(filename):
     Returns:
         dict: Dictionary containing matrix data and metadata
     """
-    matrix, diff_count, diff_matrix, alignment_quality = build_matrix_from_file(filename)
+    diff_count, diff_matrix, alignment_quality = build_matrix_from_file(filename)
 
     # Get matrix dimensions
     matrix_size = diff_matrix.shape[0]
