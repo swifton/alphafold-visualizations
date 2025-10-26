@@ -129,18 +129,6 @@ def get_matrix_data(filename):
     # Get matrix dimensions
     matrix_size = mutation_matrix.shape[0]
 
-    # Get min and max values for color scaling, excluding diagonal elements
-    # Create a mask for non-diagonal elements
-    non_diagonal_mask = ~np.eye(matrix_size, dtype=bool)
-    non_diagonal_values = mutation_matrix[non_diagonal_mask]
-
-    min_val = float(np.min(non_diagonal_values))
-    max_val = float(np.max(non_diagonal_values))
-
-    # Get min and max for diff_count
-    diff_count_min = float(np.min(diff_count))
-    diff_count_max = float(np.max(diff_count))
-
     # Convert matrix to list for JSON serialization
     matrix_data = mutation_matrix.tolist()
     diff_count_data = diff_count.tolist()
@@ -148,11 +136,7 @@ def get_matrix_data(filename):
     return {
         'matrix': matrix_data,
         'size': matrix_size,
-        'min_value': min_val,
-        'max_value': max_val,
         'diff_count': diff_count_data,
-        'diff_count_min': diff_count_min,
-        'diff_count_max': diff_count_max,
         'alignment_quality': alignment_quality
     }
 

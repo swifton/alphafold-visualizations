@@ -296,6 +296,32 @@ function visualizeAlignment(seq1, seq2) {
     console.log(`Visualized alignment of ${alignmentLength} positions`);
 }
 
+function calculateMatrixMinMax(matrix, size) {
+    let minValue = Infinity;
+    let maxValue = -Infinity;
+    for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size; j++) {
+            if (i !== j) {  // Exclude diagonal elements
+                const value = matrix[i][j];
+                if (value < minValue) minValue = value;
+                if (value > maxValue) maxValue = value;
+            }
+        }
+    }
+    return { min: minValue, max: maxValue };
+}
+
+function calculateArrayMinMax(array) {
+    let minValue = Infinity;
+    let maxValue = -Infinity;
+    for (let i = 0; i < array.length; i++) {
+        const value = array[i];
+        if (value < minValue) minValue = value;
+        if (value > maxValue) maxValue = value;
+    }
+    return { min: minValue, max: maxValue };
+}
+
 async function loadMatrix() {
     const spinner = document.getElementById('matrix-spinner');
     const matrixVisualization = document.getElementById('matrix-visualization');
@@ -319,11 +345,38 @@ async function loadMatrix() {
         console.log('Matrix received');
 
         if (data.success) {
+            // Calculate initial min and max values from the matrix (excluding diagonal)
+            let { min: minValue, max: maxValue } = calculateMatrixMinMax(data.matrix, data.size);
+            
+            // Calculate threshold at 90% of the interval from min to max
+            const threshold90 = minValue + 0.9 * (maxValue - minValue);
+            
+            // Zero out entries greater than the threshold
+            let zeroedCount = 0;
+            let totalNonDiagonal = 0;
+            for (let i = 0; i < data.size; i++) {
+                for (let j = 0; j < data.size; j++) {
+                    if (i !== j) {
+                        totalNonDiagonal++;
+                        if (data.matrix[i][j] > threshold90) {
+                            data.matrix[i][j] = 0;
+                            zeroedCount++;
+                        }
+                    }
+                }
+            }
+            
+            // Recalculate min and max after zeroing
+            ({ min: minValue, max: maxValue } = calculateMatrixMinMax(data.matrix, data.size));
+            
+            // Calculate min and max for diff_count
+            const { min: diffCountMin, max: diffCountMax } = calculateArrayMinMax(data.diff_count);
+            
             // Render the matrix as SVG
-            renderMatrixSVG(data.matrix, data.size, data.min_value, data.max_value);
+            renderMatrixSVG(data.matrix, data.size, minValue, maxValue);
 
             // Render the diff_count visualization
-            renderDiffCountSVG(data.diff_count, data.size, data.diff_count_min, data.diff_count_max);
+            renderDiffCountSVG(data.diff_count, data.size, diffCountMin, diffCountMax);
 
             // Render the alignment quality plot in the alignment tab
             renderAlignmentQualityPlot(data.alignment_quality);
