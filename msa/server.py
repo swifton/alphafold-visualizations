@@ -55,12 +55,14 @@ def build_matrix_from_file(filename):
     mutation_matrix = np.zeros((seq_len, seq_len), dtype=float)
     alignment_quality = []  # Track number of properly aligned residues per sequence
 
-    total_sequences = len(lines) - 1
+    total_sequences = 0  # Will count only sequences that pass the threshold
+    skipped_sequences = 0
 
     # Process each sequence (skip the first one since it's the reference)
     for line in lines[1:]:
         if len(line) != seq_len:
             print("ERROR: Wrong sequence length: ", len(line), " != ", seq_len)
+            continue
 
         diff_indices = np.zeros(seq_len, dtype=int)
         aligned_count = 0  # Count properly aligned residues (matching positions)
@@ -77,6 +79,14 @@ def build_matrix_from_file(filename):
                 # Match
                 aligned_count += 1
 
+        # Calculate alignment percentage
+        alignment_percentage = aligned_count / seq_len
+
+        # Exclude low quality matches
+        if alignment_percentage < 0.40:
+            skipped_sequences += 1
+            continue
+
         # Save the alignment quality for this sequence
         alignment_quality.append(aligned_count)
 
@@ -85,6 +95,11 @@ def build_matrix_from_file(filename):
 
         mutation_matrix += np.outer(diff_indices, diff_indices)
 
+        total_sequences += 1
+
+    print(f"Skipped {skipped_sequences} sequences with low alignment quality")
+    print(f"Using {total_sequences} sequences for matrix calculation")
+
     # Normalize using the new formula:
     # normalized[i,j] = (count[i,j] / N) - (mutations[i] * mutations[j] / N^2)
     # where N = total_sequences
@@ -92,6 +107,8 @@ def build_matrix_from_file(filename):
     normalized_mutation_matrix = np.zeros_like(mutation_matrix)
     for i in range(seq_len):
         for j in range(seq_len):
+            if diff_count[i] == 0 or diff_count[j] == 0:
+                continue
             if i == j:
                 # Set diagonal elements to zero
                 normalized_mutation_matrix[i, j] = 0
