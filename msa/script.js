@@ -1,5 +1,9 @@
 // Configuration
-const CELL_SIZE = 10
+let CELL_SIZE = 10
+
+// Global state for matrix rendering
+let currentMatrixData = null;
+let currentDiffCountData = null;
 
 // Main application script
 document.addEventListener('DOMContentLoaded', async () => {
@@ -126,6 +130,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     const clearHighlightBtn = document.getElementById('clear-highlight-btn');
     clearHighlightBtn.addEventListener('click', () => {
         clearHighlightInMolstar();
+    });
+
+    // Add window resize handler to recalculate cell size and re-render matrix
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        // Debounce resize events
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (currentMatrixData) {
+                console.log('Window resized, recalculating cell size and re-rendering matrix');
+                // Recalculate cell size
+                CELL_SIZE = calculateCellSize(currentMatrixData.size);
+                console.log(`New cell size: ${CELL_SIZE}px`);
+
+                // Re-render matrix and diff_count
+                renderMatrixSVG(
+                    currentMatrixData.matrix,
+                    currentMatrixData.size,
+                    currentMatrixData.minValue,
+                    currentMatrixData.maxValue
+                );
+
+                if (currentDiffCountData) {
+                    renderDiffCountSVG(
+                        currentDiffCountData.diffCount,
+                        currentDiffCountData.size,
+                        currentDiffCountData.diffCountMin,
+                        currentDiffCountData.diffCountMax
+                    );
+                }
+            }
+        }, 250); // Wait 250ms after resize stops
     });
 });
 
@@ -322,6 +358,28 @@ function calculateArrayMinMax(array) {
     return { min: minValue, max: maxValue };
 }
 
+function calculateCellSize(matrixSize) {
+    // Get available vertical space (window height minus header and padding)
+    const header = document.querySelector('header');
+    const headerHeight = header ? header.offsetHeight : 0;
+    const padding = 300; // Space for tabs, controls, margins, etc.
+    const availableHeight = window.innerHeight - headerHeight - padding;
+
+    // Calculate cell size to fit the matrix vertically
+    const cellSize = Math.floor(availableHeight / matrixSize);
+
+    // Ensure cell size is at least 2px and at most 20px
+    return Math.max(2, Math.min(20, cellSize));
+}
+
+function updateMolstarViewerSize(matrixHeight) {
+    const molstarViewer = document.getElementById('molstar-viewer');
+    if (molstarViewer) {
+        molstarViewer.style.height = `${matrixHeight}px`;
+        molstarViewer.style.width = `${matrixHeight}px`;
+    }
+}
+
 async function loadMatrix() {
     const spinner = document.getElementById('matrix-spinner');
     const matrixVisualization = document.getElementById('matrix-visualization');
@@ -346,12 +404,17 @@ async function loadMatrix() {
 
         if (data.success) {
             // Calculate initial min and max values from the matrix (excluding diagonal)
+            console.time('Calculate initial min/max from matrix');
             let { min: minValue, max: maxValue } = calculateMatrixMinMax(data.matrix, data.size);
-            
+            console.timeEnd('Calculate initial min/max from matrix');
+            console.log(`Initial calculated min: ${minValue}, max: ${maxValue}`);
+
             // Calculate threshold at 90% of the interval from min to max
             const threshold90 = minValue + 0.9 * (maxValue - minValue);
-            
+            console.log(`90% interval threshold: ${threshold90}`);
+
             // Zero out entries greater than the threshold
+            console.time('Zero out values > 90% of interval');
             let zeroedCount = 0;
             let totalNonDiagonal = 0;
             for (let i = 0; i < data.size; i++) {
@@ -365,13 +428,39 @@ async function loadMatrix() {
                     }
                 }
             }
-            
+            console.timeEnd('Zero out values > 90% of interval');
+            console.log(`Zeroed ${zeroedCount} entries (${(zeroedCount / totalNonDiagonal * 100).toFixed(1)}%)`);
+
             // Recalculate min and max after zeroing
+            console.time('Recalculate min/max after zeroing');
             ({ min: minValue, max: maxValue } = calculateMatrixMinMax(data.matrix, data.size));
-            
+            console.timeEnd('Recalculate min/max after zeroing');
+            console.log(`After zeroing - min: ${minValue}, max: ${maxValue}`);
+
             // Calculate min and max for diff_count
+            console.time('Calculate min/max from diff_count');
             const { min: diffCountMin, max: diffCountMax } = calculateArrayMinMax(data.diff_count);
-            
+            console.timeEnd('Calculate min/max from diff_count');
+            console.log(`Calculated diff_count min: ${diffCountMin}, max: ${diffCountMax}`);
+
+            // Calculate optimal cell size based on window height
+            CELL_SIZE = calculateCellSize(data.size);
+            console.log(`Calculated cell size: ${CELL_SIZE}px for matrix size ${data.size}x${data.size}`);
+
+            // Store data globally for resize handling
+            currentMatrixData = {
+                matrix: data.matrix,
+                size: data.size,
+                minValue: minValue,
+                maxValue: maxValue
+            };
+            currentDiffCountData = {
+                diffCount: data.diff_count,
+                size: data.size,
+                diffCountMin: diffCountMin,
+                diffCountMax: diffCountMax
+            };
+
             // Render the matrix as SVG
             renderMatrixSVG(data.matrix, data.size, minValue, maxValue);
 
@@ -477,6 +566,9 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
     }
 
     console.log(`Rendered ${size}x${size} matrix with ${size * size} cells`);
+
+    // Update Molstar viewer size to match matrix height
+    updateMolstarViewerSize(height);
 }
 
 let molstarViewer = null;
