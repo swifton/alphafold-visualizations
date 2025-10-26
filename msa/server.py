@@ -64,8 +64,7 @@ def align_sequences(seq1, seq2):
 def build_matrix_from_file(filename):
     """
     Build mutation_matrix by tracking which letters in sequences were changed
-    compared to the first sequence. Uses Needleman-Wunsch alignment to handle
-    sequences of different lengths.
+    compared to the first sequence. Compares sequences position-by-position.
     """
     first_line = None
     lines = []
@@ -73,55 +72,45 @@ def build_matrix_from_file(filename):
         for line in f:
             line = line.rstrip('\n')
             if line and (line[0] == '-' or ('A' <= line[0] <= 'Z')):
-                line = line.upper()
+                line = ''.join(c for c in line if not c.islower())
                 lines.append(line)
                 if first_line is None:
                     first_line = line
-                    # Get the length of the first sequence (without gaps)
-                    first_clean = first_line.replace('-', '')
-                    n = len(first_clean)
+                    seq_len = len(first_line)
     if first_line is None:
         raise ValueError("No valid lines found in file.")
 
-    diff_count = np.zeros(n, dtype=float)
-    mutation_matrix = np.zeros((n, n), dtype=float)
+    diff_count = np.zeros(seq_len, dtype=float)
+    mutation_matrix = np.zeros((seq_len, seq_len), dtype=float)
     alignment_quality = []  # Track number of properly aligned residues per sequence
 
     total_sequences = len(lines) - 1
 
     # Timing measurements
-    time_alignment = 0
     time_diff_indices = 0
     time_matrix_fill = 0
 
     # Process each sequence (skip the first one since it's the reference)
     for line in lines[1:]:
-        # Time: Alignment
-        t0 = time.time()
-        alignment = align_sequences(first_line, line)
-        time_alignment += time.time() - t0
-
-        # Get clean sequences (without gaps)
-        first_clean = first_line.replace('-', '')
-        line_clean = line.replace('-', '')
+        if len(line) != seq_len:
+            print("ERROR: Wrong sequence length: ", len(line), " != ", seq_len)
 
         # Time: Building diff_indices
         t0 = time.time()
         diff_indices = []
         aligned_count = 0  # Count properly aligned residues (matching positions)
 
-        for idx1, idx2 in alignment:
-            # Both positions have amino acids (not gaps)
-            if idx1 != -1 and idx2 != -1:
-                if first_clean[idx1] != line_clean[idx2]:
-                    # Different amino acids at aligned positions
-                    diff_indices.append(idx1)
-                else:
-                    # Same amino acids at aligned positions
-                    aligned_count += 1  # Count as properly aligned
-            elif idx1 != -1:
-                # Gap in the aligned sequence (deletion) - treat as difference
-                diff_indices.append(idx1)
+        # Compare position-by-position
+        for i in range(seq_len):
+            char1 = first_line[i]
+            char2 = line[i]
+
+            if char1 != char2:
+                # Mismatch
+                diff_indices.append(i)
+            else:
+                # Match
+                aligned_count += 1
 
         # Save the alignment quality for this sequence
         alignment_quality.append(aligned_count)
@@ -145,8 +134,8 @@ def build_matrix_from_file(filename):
     # where N = total_sequences
     # This gives the correlation adjusted for individual mutation frequencies
     normalized_mutation_matrix = np.zeros_like(mutation_matrix)
-    for i in range(n):
-        for j in range(n):
+    for i in range(seq_len):
+        for j in range(seq_len):
             if i == j:
                 # Set diagonal elements to zero
                 normalized_mutation_matrix[i, j] = 0
@@ -169,10 +158,9 @@ def build_matrix_from_file(filename):
     # Print timing statistics
     print(f"\n=== build_matrix_from_file Performance ===")
     print(f"Total sequences processed: {total_sequences}")
-    print(f"Time for alignments:       {time_alignment:.3f}s ({time_alignment/total_sequences*1000:.2f}ms per sequence)")
     print(f"Time for diff_indices:     {time_diff_indices:.3f}s ({time_diff_indices/total_sequences*1000:.2f}ms per sequence)")
     print(f"Time for matrix filling:   {time_matrix_fill:.3f}s ({time_matrix_fill/total_sequences*1000:.2f}ms per sequence)")
-    print(f"Total time:                {time_alignment + time_diff_indices + time_matrix_fill:.3f}s")
+    print(f"Total time:                {time_diff_indices + time_matrix_fill:.3f}s")
     print(f"==========================================\n")
 
     return diff_count, normalized_mutation_matrix, alignment_quality
@@ -496,15 +484,14 @@ class MSAHandler(BaseHTTPRequestHandler):
                 # Shouldn't happen but handle gracefully
                 seq2 = seq1
 
-        # Compute alignment
-        alignment = align_sequences(seq1, seq2)
+        # Remove lowercase letters from seq2
+        seq2 = ''.join(c for c in seq2 if not c.islower())
 
         return {
             'filename': f'{MSAHandler.current_protein}.a3m',
             'seq1': seq1,
             'seq2': seq2,
             'seq2_header': seq2_header,
-            'alignment': alignment,
             'seq1_length': len(seq1.replace('-', '')),
             'seq2_length': len(seq2.replace('-', '')),
             'current_index': MSAHandler.current_sequence_index,

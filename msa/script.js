@@ -154,13 +154,12 @@ async function loadSequences(endpoint) {
         `;
 
         console.log(`Loaded sequence ${data.current_index + 1} of ${data.total_sequences}`);
-        console.log(`Alignment has ${data.alignment.length} positions`);
 
         // Clear previous visualization
         const svg = document.getElementById('sequence-viz');
         svg.innerHTML = '';
 
-        visualizeAlignment(data.seq1, data.seq2, data.alignment);
+        visualizeAlignment(data.seq1, data.seq2);
 
     } catch (error) {
         console.error('Error loading file:', error);
@@ -172,7 +171,7 @@ async function loadSequences(endpoint) {
     }
 }
 
-function visualizeAlignment(seq1, seq2, alignment) {
+function visualizeAlignment(seq1, seq2) {
     // Configuration
     const boxSize = 30;
     const padding = 2;
@@ -183,8 +182,11 @@ function visualizeAlignment(seq1, seq2, alignment) {
     const gapColor = '#e0e0e0'; // Light gray for gaps
     const deletionColor = '#f1c40f'; // Yellow for deletions from sequence 1
 
+    // Sequences should be same length now
+    const alignmentLength = seq1.length;
+
     // Calculate dimensions (two rows)
-    const width = alignment.length * (boxSize + padding);
+    const width = alignmentLength * (boxSize + padding);
     const height = 2 * boxSize + rowGap + padding;
 
     // Get SVG element
@@ -192,20 +194,18 @@ function visualizeAlignment(seq1, seq2, alignment) {
     svg.setAttribute('width', width);
     svg.setAttribute('height', height);
 
-    // Remove dashes from sequences to get actual characters by index
-    const seq1_clean = seq1.replace(/-/g, '');
-    const seq2_clean = seq2.replace(/-/g, '');
-
-    // Create visualization for each alignment position
-    for (let i = 0; i < alignment.length; i++) {
-        const [idx1, idx2] = alignment[i];
+    // Create visualization for each position
+    for (let i = 0; i < alignmentLength; i++) {
+        const char1 = seq1[i] || '';
+        const char2 = seq2[i] || '';
         const x = i * (boxSize + padding);
 
-        // Check if this is a mismatch (both have amino acids but they're different)
-        const isMismatch = idx1 !== -1 && idx2 !== -1 && seq1_clean[idx1] !== seq2_clean[idx2];
-        // Check if this is a deletion from sequence 1 (gap in seq2, residue in seq1)
-        const isDeletion = idx1 !== -1 && idx2 === -1;
-        
+        // Check if this is a mismatch or deletion
+        const isGap1 = char1 === '-';
+        const isGap2 = char2 === '-';
+        const isMismatch = !isGap1 && !isGap2 && char1 !== char2;
+        const isDeletion = !isGap1 && isGap2;  // Deletion from seq1 (gap in seq2)
+
         // Draw sequence 1 box (top row)
         const g1 = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         const rect1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -214,7 +214,7 @@ function visualizeAlignment(seq1, seq2, alignment) {
         rect1.setAttribute('width', boxSize);
         rect1.setAttribute('height', boxSize);
 
-        if (idx1 === -1) {
+        if (isGap1) {
             // Gap in sequence 1
             rect1.setAttribute('fill', gapColor);
             rect1.setAttribute('stroke', '#999');
@@ -224,7 +224,7 @@ function visualizeAlignment(seq1, seq2, alignment) {
             rect1.setAttribute('fill', mismatchColor);
             rect1.setAttribute('stroke', '#333');
         } else if (isDeletion) {
-            // Deletion from sequence 1 (gap in seq1, residue in seq2) - use yellow
+            // Deletion (gap in seq2) - use yellow
             rect1.setAttribute('fill', deletionColor);
             rect1.setAttribute('stroke', '#333');
         } else {
@@ -237,7 +237,7 @@ function visualizeAlignment(seq1, seq2, alignment) {
         g1.appendChild(rect1);
 
         // Add text for sequence 1
-        if (idx1 !== -1) {
+        if (!isGap1) {
             const text1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             text1.setAttribute('x', x + boxSize / 2);
             text1.setAttribute('y', boxSize / 2);
@@ -248,7 +248,7 @@ function visualizeAlignment(seq1, seq2, alignment) {
             text1.setAttribute('font-size', '14px');
             text1.setAttribute('font-weight', 'bold');
             text1.setAttribute('font-family', 'monospace');
-            text1.textContent = seq1_clean[idx1];
+            text1.textContent = char1;
             g1.appendChild(text1);
         }
         svg.appendChild(g1);
@@ -261,7 +261,7 @@ function visualizeAlignment(seq1, seq2, alignment) {
         rect2.setAttribute('width', boxSize);
         rect2.setAttribute('height', boxSize);
 
-        if (idx2 === -1) {
+        if (isGap2) {
             // Gap in sequence 2
             rect2.setAttribute('fill', gapColor);
             rect2.setAttribute('stroke', '#999');
@@ -280,7 +280,7 @@ function visualizeAlignment(seq1, seq2, alignment) {
         g2.appendChild(rect2);
 
         // Add text for sequence 2
-        if (idx2 !== -1) {
+        if (!isGap2) {
             const text2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             text2.setAttribute('x', x + boxSize / 2);
             text2.setAttribute('y', boxSize + rowGap + boxSize / 2);
@@ -290,13 +290,13 @@ function visualizeAlignment(seq1, seq2, alignment) {
             text2.setAttribute('font-size', '14px');
             text2.setAttribute('font-weight', 'bold');
             text2.setAttribute('font-family', 'monospace');
-            text2.textContent = seq2_clean[idx2];
+            text2.textContent = char2;
             g2.appendChild(text2);
         }
         svg.appendChild(g2);
     }
 
-    console.log(`Visualized alignment of ${alignment.length} positions`);
+    console.log(`Visualized alignment of ${alignmentLength} positions`);
 }
 
 async function loadMatrix() {
