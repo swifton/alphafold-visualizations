@@ -32,35 +32,6 @@ def get_available_proteins():
 
     return sorted(proteins)
 
-
-def align_sequences(seq1, seq2):
-    """
-    Align two sequences using Needleman-Wunsch algorithm.
-    Dashes are treated as gap characters (not part of the actual sequence).
-
-    Returns a list of tuples where each tuple is:
-    - (idx1, idx2): matching positions in both sequences
-    - (idx1, -1): deletion in seq2 (gap in seq2)
-    - (-1, idx2): insertion in seq2 (gap in seq1)
-
-    Args:
-        seq1: Reference sequence (string), may contain dashes '-' for gaps
-        seq2: Aligned sequence (string), may contain dashes '-' for gaps
-
-    Returns:
-        List of tuples representing the alignment
-    """
-    # Remove dashes from both sequences before alignment
-    # We'll treat dashes as pre-existing gaps that should be preserved
-    seq1_clean = seq1.replace('-', '')
-    seq2_clean = seq2.replace('-', '')
-
-    # Use Needleman-Wunsch algorithm on clean sequences
-    alignment = needleman_wunsch(seq1_clean, seq2_clean)
-
-    return alignment
-
-
 def build_matrix_from_file(filename):
     """
     Build mutation_matrix by tracking which letters in sequences were changed
@@ -207,66 +178,6 @@ def get_matrix_data(filename):
         'diff_count_max': diff_count_max,
         'alignment_quality': alignment_quality
     }
-
-
-def needleman_wunsch(seq1, seq2):
-    """
-    Needleman-Wunsch global sequence alignment algorithm.
-
-    Args:
-        seq1: First sequence (string)
-        seq2: Second sequence (string)
-
-    Returns:
-        List of tuples representing the alignment
-    """
-    # Scoring scheme
-    match_score = 1
-    mismatch_score = -1
-    gap_penalty = -2
-
-    m, n = len(seq1), len(seq2)
-
-    # Initialize scoring matrix
-    score = [[0] * (n + 1) for _ in range(m + 1)]
-
-    # Initialize first row and column
-    for i in range(m + 1):
-        score[i][0] = gap_penalty * i
-    for j in range(n + 1):
-        score[0][j] = gap_penalty * j
-
-    # Fill the scoring matrix
-    for i in range(1, m + 1):
-        for j in range(1, n + 1):
-            match = score[i-1][j-1] + (match_score if seq1[i-1] == seq2[j-1] else mismatch_score)
-            delete = score[i-1][j] + gap_penalty
-            insert = score[i][j-1] + gap_penalty
-            score[i][j] = max(match, delete, insert)
-
-    # Traceback to find alignment
-    alignment = []
-    i, j = m, n
-
-    while i > 0 or j > 0:
-        if i > 0 and j > 0 and score[i][j] == score[i-1][j-1] + (match_score if seq1[i-1] == seq2[j-1] else mismatch_score):
-            # Match or mismatch
-            alignment.append((i-1, j-1))
-            i -= 1
-            j -= 1
-        elif i > 0 and score[i][j] == score[i-1][j] + gap_penalty:
-            # Deletion (gap in seq2)
-            alignment.append((i-1, -1))
-            i -= 1
-        else:
-            # Insertion (gap in seq1)
-            alignment.append((-1, j-1))
-            j -= 1
-
-    # Reverse alignment (traceback builds it backwards)
-    alignment.reverse()
-
-    return alignment
 
 
 class MSAHandler(BaseHTTPRequestHandler):
