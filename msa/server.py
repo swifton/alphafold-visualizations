@@ -6,6 +6,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import os
 import random
+import time
 import numpy as np
 
 # Configuration
@@ -88,18 +89,25 @@ def build_matrix_from_file(filename):
 
     total_sequences = len(lines) - 1
 
+    # Timing measurements
+    time_alignment = 0
+    time_diff_indices = 0
+    time_matrix_fill = 0
+
     # Process each sequence (skip the first one since it's the reference)
     for line in lines[1:]:
-        # Align the current sequence with the first sequence
+        # Time: Alignment
+        t0 = time.time()
         alignment = align_sequences(first_line, line)
+        time_alignment += time.time() - t0
 
         # Get clean sequences (without gaps)
         first_clean = first_line.replace('-', '')
         line_clean = line.replace('-', '')
 
-        # Track which positions in the first sequence are different/same
+        # Time: Building diff_indices
+        t0 = time.time()
         diff_indices = []
-        same_indices = []
         aligned_count = 0  # Count properly aligned residues (matching positions)
 
         for idx1, idx2 in alignment:
@@ -110,7 +118,6 @@ def build_matrix_from_file(filename):
                     diff_indices.append(idx1)
                 else:
                     # Same amino acids at aligned positions
-                    same_indices.append(idx1)
                     aligned_count += 1  # Count as properly aligned
             elif idx1 != -1:
                 # Gap in the aligned sequence (deletion) - treat as difference
@@ -123,11 +130,15 @@ def build_matrix_from_file(filename):
         for i in diff_indices:
             diff_count[i] += 1
 
-        # Fill mutation_matrix: for each i in diff_indices, for each j in same_indices
+        time_diff_indices += time.time() - t0
+
+        # Time: Filling matrix
+        t0 = time.time()
         for i in range(len(diff_indices)):
             for j in range(i+1, len(diff_indices)):
                 mutation_matrix[diff_indices[i]][diff_indices[j]] += 1
                 mutation_matrix[diff_indices[j]][diff_indices[i]] += 1
+        time_matrix_fill += time.time() - t0
 
     # Normalize using the new formula:
     # normalized[i,j] = (count[i,j] / N) - (mutations[i] * mutations[j] / N^2)
@@ -154,6 +165,15 @@ def build_matrix_from_file(filename):
 
                 # Normalized value = observed - expected
                 normalized_mutation_matrix[i, j] = (observed - expected) / (var_i * var_j)
+
+    # Print timing statistics
+    print(f"\n=== build_matrix_from_file Performance ===")
+    print(f"Total sequences processed: {total_sequences}")
+    print(f"Time for alignments:       {time_alignment:.3f}s ({time_alignment/total_sequences*1000:.2f}ms per sequence)")
+    print(f"Time for diff_indices:     {time_diff_indices:.3f}s ({time_diff_indices/total_sequences*1000:.2f}ms per sequence)")
+    print(f"Time for matrix filling:   {time_matrix_fill:.3f}s ({time_matrix_fill/total_sequences*1000:.2f}ms per sequence)")
+    print(f"Total time:                {time_alignment + time_diff_indices + time_matrix_fill:.3f}s")
+    print(f"==========================================\n")
 
     return diff_count, normalized_mutation_matrix, alignment_quality
 
