@@ -62,7 +62,7 @@ def align_sequences(seq1, seq2):
 
 def build_matrix_from_file(filename):
     """
-    Build diff_matrix by tracking which letters in sequences were changed
+    Build mutation_matrix by tracking which letters in sequences were changed
     compared to the first sequence. Uses Needleman-Wunsch alignment to handle
     sequences of different lengths.
     """
@@ -83,7 +83,7 @@ def build_matrix_from_file(filename):
         raise ValueError("No valid lines found in file.")
 
     diff_count = np.zeros(n, dtype=float)
-    diff_matrix = np.zeros((n, n), dtype=float)
+    mutation_matrix = np.zeros((n, n), dtype=float)
     alignment_quality = []  # Track number of properly aligned residues per sequence
 
     total_sequences = len(lines) - 1
@@ -123,25 +123,25 @@ def build_matrix_from_file(filename):
         for i in diff_indices:
             diff_count[i] += 1
 
-        # Fill diff_matrix: for each i in diff_indices, for each j in same_indices
+        # Fill mutation_matrix: for each i in diff_indices, for each j in same_indices
         for i in range(len(diff_indices)):
             for j in range(i+1, len(diff_indices)):
-                diff_matrix[diff_indices[i]][diff_indices[j]] += 1
-                diff_matrix[diff_indices[j]][diff_indices[i]] += 1
+                mutation_matrix[diff_indices[i]][diff_indices[j]] += 1
+                mutation_matrix[diff_indices[j]][diff_indices[i]] += 1
 
     # Normalize using the new formula:
     # normalized[i,j] = (count[i,j] / N) - (mutations[i] * mutations[j] / N^2)
     # where N = total_sequences
     # This gives the correlation adjusted for individual mutation frequencies
-    normalized_diff_matrix = np.zeros_like(diff_matrix)
+    normalized_mutation_matrix = np.zeros_like(mutation_matrix)
     for i in range(n):
         for j in range(n):
             if i == j:
                 # Set diagonal elements to zero
-                normalized_diff_matrix[i, j] = 0
+                normalized_mutation_matrix[i, j] = 0
             else:
                 # First term: observed co-mutation frequency
-                observed = diff_matrix[i, j] / total_sequences
+                observed = mutation_matrix[i, j] / total_sequences
 
                 # Second term: expected co-mutation if mutations were independent
                 expected = (diff_count[i] * diff_count[j]) / (total_sequences ** 2)
@@ -153,14 +153,14 @@ def build_matrix_from_file(filename):
                 var_j = (mean_j - mean_j ** 2)
 
                 # Normalized value = observed - expected
-                normalized_diff_matrix[i, j] = (observed - expected) / (var_i * var_j)
+                normalized_mutation_matrix[i, j] = (observed - expected) / (var_i * var_j)
 
-    return diff_count, normalized_diff_matrix, alignment_quality
+    return diff_count, normalized_mutation_matrix, alignment_quality
 
 
 def get_matrix_data(filename):
     """
-    Get the diff_matrix data for frontend rendering.
+    Get the mutation_matrix data for frontend rendering.
 
     Args:
         filename: Path to the MSA file
@@ -168,15 +168,15 @@ def get_matrix_data(filename):
     Returns:
         dict: Dictionary containing matrix data and metadata
     """
-    diff_count, diff_matrix, alignment_quality = build_matrix_from_file(filename)
+    diff_count, mutation_matrix, alignment_quality = build_matrix_from_file(filename)
 
     # Get matrix dimensions
-    matrix_size = diff_matrix.shape[0]
+    matrix_size = mutation_matrix.shape[0]
 
     # Get min and max values for color scaling, excluding diagonal elements
     # Create a mask for non-diagonal elements
     non_diagonal_mask = ~np.eye(matrix_size, dtype=bool)
-    non_diagonal_values = diff_matrix[non_diagonal_mask]
+    non_diagonal_values = mutation_matrix[non_diagonal_mask]
 
     min_val = float(np.min(non_diagonal_values))
     max_val = float(np.max(non_diagonal_values))
@@ -186,7 +186,7 @@ def get_matrix_data(filename):
     diff_count_max = float(np.max(diff_count))
 
     # Convert matrix to list for JSON serialization
-    matrix_data = diff_matrix.tolist()
+    matrix_data = mutation_matrix.tolist()
     diff_count_data = diff_count.tolist()
 
     return {
