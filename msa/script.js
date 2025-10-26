@@ -90,7 +90,6 @@ async function loadSequences(endpoint) {
 
         // Update the display
         fileLoader.innerHTML = `
-            <h2>MSA Sequence Alignment</h2>
             <p>File: ${data.filename}</p>
             <p>Showing sequence ${data.current_index + 1} of ${data.total_sequences}</p>
             <p>Sequence 1 (reference): ${data.seq1_length} amino acids</p>
