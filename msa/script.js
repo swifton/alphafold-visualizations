@@ -5,6 +5,63 @@ const CELL_SIZE = 10
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('MSA Visualizations app loaded');
 
+    // Populate protein selector dropdown
+    const proteinSelector = document.getElementById('protein-selector');
+    const availableProteins = window.AVAILABLE_PROTEINS || [];
+    const currentProtein = window.CURRENT_PROTEIN || '';
+
+    availableProteins.forEach(protein => {
+        const option = document.createElement('option');
+        option.value = protein;
+        option.textContent = protein;
+        if (protein === currentProtein) {
+            option.selected = true;
+        }
+        proteinSelector.appendChild(option);
+    });
+
+    // Handle protein selection change
+    proteinSelector.addEventListener('change', async (event) => {
+        const selectedProtein = event.target.value;
+        console.log(`Protein selected: ${selectedProtein}`);
+
+        // Send request to server with selected protein
+        try {
+            const response = await fetch('/api/select-protein', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ protein: selectedProtein })
+            });
+
+            if (response.ok) {
+                console.log(`Successfully selected protein: ${selectedProtein}`);
+
+                // Hide visualizations while loading
+                const matrixVisualization = document.getElementById('matrix-visualization');
+                const alignmentQualityContainer = document.getElementById('alignment-quality-container');
+                matrixVisualization.style.display = 'none';
+                alignmentQualityContainer.style.display = 'none';
+
+                // Reset molstar viewer (will be cleared when reinitializing)
+                molstarViewer = null;
+
+                // Reload alignment data for the new protein
+                await loadSequences('/api/msa');
+
+                // Reload matrix data for the new protein (this will also reload PDB in molstar)
+                await loadMatrix();
+
+                console.log(`Reloaded data for ${selectedProtein}`);
+            } else {
+                console.error('Failed to select protein:', response.statusText);
+            }
+        } catch (error) {
+            console.error('Error selecting protein:', error);
+        }
+    });
+
     // Set up tab switching
     const alignmentTab = document.getElementById('alignment-tab');
     const correlationTab = document.getElementById('correlation-tab');
@@ -521,15 +578,12 @@ async function clearHighlightInMolstar() {
 }
 
 async function initMolstarViewer() {
-    // Don't reinitialize if already created
-    if (molstarViewer) {
-        console.log('PDBe Molstar viewer already initialized');
-        return;
-    }
-
     const viewerElement = document.getElementById('molstar-viewer');
 
     try {
+        // Clear the viewer element completely before initializing
+        viewerElement.innerHTML = '';
+
         console.log('Initializing PDBe Molstar viewer...');
 
         // Create the PDBe Molstar viewer instance

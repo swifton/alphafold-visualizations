@@ -9,7 +9,27 @@ import random
 import numpy as np
 
 # Configuration
-PROTEIN_NAME = 'lamprey'
+PROTEIN_NAME = 'insulin'
+
+
+def get_available_proteins():
+    """
+    Get list of available protein examples from the examples folder.
+
+    Returns:
+        list: List of protein names (subfolder names)
+    """
+    examples_dir = 'examples'
+    if not os.path.exists(examples_dir):
+        return []
+
+    proteins = []
+    for item in os.listdir(examples_dir):
+        item_path = os.path.join(examples_dir, item)
+        if os.path.isdir(item_path):
+            proteins.append(item)
+
+    return sorted(proteins)
 
 
 def align_sequences(seq1, seq2):
@@ -253,16 +273,34 @@ def needleman_wunsch(seq1, seq2):
 
 
 class MSAHandler(BaseHTTPRequestHandler):
-    # Class variable to store current sequence index
+    # Class variables
     current_sequence_index = 0
+    current_protein = PROTEIN_NAME  # Track currently selected protein
+
     def do_GET(self):
         if self.path == '/':
-            # Serve the main HTML page
+            # Serve the main HTML page with protein list injected
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            with open('index.html', 'rb') as f:
-                self.wfile.write(f.read())
+
+            # Get available proteins
+            proteins = get_available_proteins()
+
+            # Read HTML and inject protein data
+            with open('index.html', 'r') as f:
+                html_content = f.read()
+
+            # Inject protein list and current protein as a script tag before </head>
+            protein_data_script = f'''
+                    <script>
+                        window.AVAILABLE_PROTEINS = {json.dumps(proteins)};
+                        window.CURRENT_PROTEIN = {json.dumps(MSAHandler.current_protein)};
+                    </script>
+                </head>'''
+            html_content = html_content.replace('</head>', protein_data_script)
+
+            self.wfile.write(html_content.encode('utf-8'))
 
         elif self.path == '/styles.css':
             # Serve CSS
@@ -281,12 +319,13 @@ class MSAHandler(BaseHTTPRequestHandler):
                 self.wfile.write(f.read())
 
         elif self.path == f'/pdb':
-            # Serve PDB file
+            # Serve PDB file from examples folder
             self.send_response(200)
             self.send_header('Content-type', 'chemical/x-pdb')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            with open(f'{PROTEIN_NAME}.pdb', 'rb') as f:
+            pdb_path = f'examples/{MSAHandler.current_protein}/{MSAHandler.current_protein}.pdb'
+            with open(pdb_path, 'rb') as f:
                 self.wfile.write(f.read())
 
         elif self.path == '/api/msa':
@@ -333,7 +372,8 @@ class MSAHandler(BaseHTTPRequestHandler):
 
             # Set a random sequence index
             # First, we need to know the total number of sequences
-            with open(f'{PROTEIN_NAME}.a3m', 'r') as f:
+            a3m_path = f'examples/{MSAHandler.current_protein}/{MSAHandler.current_protein}.a3m'
+            with open(a3m_path, 'r') as f:
                 lines = f.readlines()
                 total_sequences = (len(lines) - 3) // 2
 
@@ -352,7 +392,8 @@ class MSAHandler(BaseHTTPRequestHandler):
 
             try:
                 # Get the matrix data
-                matrix_data = get_matrix_data(f'{PROTEIN_NAME}.a3m')
+                a3m_path = f'examples/{MSAHandler.current_protein}/{MSAHandler.current_protein}.a3m'
+                matrix_data = get_matrix_data(a3m_path)
                 response = {
                     'success': True,
                     **matrix_data
@@ -373,7 +414,8 @@ class MSAHandler(BaseHTTPRequestHandler):
 
             try:
                 # Read the reference sequence from .a3m file (line 3, index 2)
-                with open(f'{PROTEIN_NAME}.a3m', 'r') as f:
+                a3m_path = f'examples/{MSAHandler.current_protein}/{MSAHandler.current_protein}.a3m'
+                with open(a3m_path, 'r') as f:
                     lines = f.readlines()
                     if len(lines) > 2:
                         ref_seq = lines[2].rstrip('\n').replace('-', '')
@@ -414,7 +456,8 @@ class MSAHandler(BaseHTTPRequestHandler):
         # Sequence lines are at indices: 2 (reference), 4, 6, 8, 10, 12, ...
         target_line_index = 4 + (MSAHandler.current_sequence_index * 2)
 
-        with open(f'{PROTEIN_NAME}.a3m', 'r') as f:
+        a3m_path = f'examples/{MSAHandler.current_protein}/{MSAHandler.current_protein}.a3m'
+        with open(a3m_path, 'r') as f:
             lines = f.readlines()
             total_lines = len(lines)
 
@@ -448,7 +491,7 @@ class MSAHandler(BaseHTTPRequestHandler):
         alignment = align_sequences(seq1, seq2)
 
         return {
-            'filename': f'{PROTEIN_NAME}.a3m',
+            'filename': f'{MSAHandler.current_protein}.a3m',
             'seq1': seq1,
             'seq2': seq2,
             'seq2_header': seq2_header,
@@ -458,6 +501,46 @@ class MSAHandler(BaseHTTPRequestHandler):
             'current_index': MSAHandler.current_sequence_index,
             'total_sequences': total_sequences
         }
+
+    def do_POST(self):
+        if self.path == '/api/select-protein':
+            # Handle protein selection
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+
+            selected_protein = data.get('protein')
+
+            if selected_protein:
+                # Update the current protein
+                MSAHandler.current_protein = selected_protein
+                # Reset sequence index when switching proteins
+                MSAHandler.current_sequence_index = 0
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+
+                response = {
+                    'success': True,
+                    'protein': selected_protein
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+
+                print(f"Switched to protein: {selected_protein}")
+            else:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+
+                response = {
+                    'success': False,
+                    'error': 'No protein specified'
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
 
     def log_message(self, format, *args):
         # Custom log format
