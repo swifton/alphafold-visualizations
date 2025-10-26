@@ -91,6 +91,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load initial sequences
     await loadSequences('/api/msa');
 
+    // Load matrix automatically
+    await loadMatrix();
+
     // Add event listener to Previous button
     const previousBtn = document.getElementById('previous-btn');
     previousBtn.addEventListener('click', async () => {
@@ -107,12 +110,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const randomBtn = document.getElementById('random-btn');
     randomBtn.addEventListener('click', async () => {
         await loadSequences('/api/random');
-    });
-
-    // Add event listener to Matrix button
-    const matrixBtn = document.getElementById('matrix-btn');
-    matrixBtn.addEventListener('click', async () => {
-        await loadMatrix();
     });
 
     // Add event listeners for residue highlight buttons
@@ -300,15 +297,11 @@ function visualizeAlignment(seq1, seq2) {
 }
 
 async function loadMatrix() {
-    const matrixBtn = document.getElementById('matrix-btn');
     const spinner = document.getElementById('matrix-spinner');
     const matrixVisualization = document.getElementById('matrix-visualization');
 
     try {
-        // Disable button and show spinner
-        if (matrixBtn) {
-            matrixBtn.disabled = true;
-        }
+        // Show spinner
         if (spinner) {
             spinner.style.display = 'block';
         }
@@ -356,10 +349,7 @@ async function loadMatrix() {
         console.error('Error loading matrix:', error);
         alert(`Error loading matrix: ${error.message}`);
     } finally {
-        // Re-enable button and hide spinner
-        if (matrixBtn) {
-            matrixBtn.disabled = false;
-        }
+        // Hide spinner
         if (spinner) {
             spinner.style.display = 'none';
         }
