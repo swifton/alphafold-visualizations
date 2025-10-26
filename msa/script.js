@@ -306,8 +306,12 @@ async function loadMatrix() {
 
     try {
         // Disable button and show spinner
-        matrixBtn.disabled = true;
-        spinner.style.display = 'block';
+        if (matrixBtn) {
+            matrixBtn.disabled = true;
+        }
+        if (spinner) {
+            spinner.style.display = 'block';
+        }
 
         console.log('Requesting matrix from server...');
 
@@ -353,8 +357,12 @@ async function loadMatrix() {
         alert(`Error loading matrix: ${error.message}`);
     } finally {
         // Re-enable button and hide spinner
-        matrixBtn.disabled = false;
-        spinner.style.display = 'none';
+        if (matrixBtn) {
+            matrixBtn.disabled = false;
+        }
+        if (spinner) {
+            spinner.style.display = 'none';
+        }
     }
 }
 
@@ -581,10 +589,16 @@ async function initMolstarViewer() {
     const viewerElement = document.getElementById('molstar-viewer');
 
     try {
-        // Clear the viewer element completely before initializing
-        viewerElement.innerHTML = '';
-
         console.log('Initializing PDBe Molstar viewer...');
+
+        // Completely recreate the viewer element to ensure clean state
+        const parent = viewerElement.parentNode;
+        const newViewerElement = document.createElement('div');
+        newViewerElement.id = 'molstar-viewer';
+        parent.replaceChild(newViewerElement, viewerElement);
+
+        // Small delay to ensure DOM is ready
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         // Create the PDBe Molstar viewer instance
         const viewerInstance = new PDBeMolstarPlugin();
@@ -603,7 +617,7 @@ async function initMolstarViewer() {
             landscape: false
         };
 
-        await viewerInstance.render(viewerElement, options);
+        await viewerInstance.render(newViewerElement, options);
         molstarViewer = viewerInstance;
 
         console.log('PDBe Molstar viewer initialized and structure loaded');
