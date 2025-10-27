@@ -179,11 +179,18 @@ async function loadSequences(endpoint) {
         const data = await response.json();
 
         // Update the display
+        let seq2Info = '';
+        if (data.protein_name && data.organism) {
+            seq2Info = `- <strong>${data.protein_name}</strong> (${data.organism})`;
+        } else if (data.seq2_header) {
+            seq2Info = `- ${data.seq2_header}`;
+        }
+
         fileLoader.innerHTML = `
             <p>File: ${data.filename}</p>
             <p>Showing sequence ${data.current_index + 1} of ${data.total_sequences}</p>
             <p>Sequence 1 (reference): ${data.seq1_length} amino acids</p>
-            <p>Sequence 2: ${data.seq2_length} amino acids ${data.seq2_header ? '- ' + data.seq2_header : ''}</p>
+            <p>Sequence 2: ${data.seq2_length} amino acids ${seq2Info}</p>
         `;
 
         console.log(`Loaded sequence ${data.current_index + 1} of ${data.total_sequences}`);

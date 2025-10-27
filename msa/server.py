@@ -376,11 +376,63 @@ class MSAHandler(BaseHTTPRequestHandler):
         # Remove lowercase letters from seq2
         seq2 = ''.join(c for c in seq2 if not c.islower())
 
+        # Initialize protein metadata
+        protein_name = None
+        organism = None
+
+        # Parse UniRef100 metadata to extract UniProt ID and fetch protein data
+        if seq2_header.startswith('>UniRef100_'):
+            try:
+                # UniRef100 format: >UniRef100_<UniProtID> ...
+                # Extract the UniProt ID (everything after UniRef100_ until the first space)
+                uniprot_id = seq2_header.split('_', 1)[1].split(' ')[0].split('\t')[0]
+                print(f"UniProt ID: {uniprot_id}")
+
+                # Fetch protein information from UniProt API
+                import urllib.request
+                import urllib.error
+
+                uniprot_url = f"https://rest.uniprot.org/uniprotkb/{uniprot_id}.json"
+                try:
+                    with urllib.request.urlopen(uniprot_url, timeout=5) as response:
+                        data = json.loads(response.read().decode('utf-8'))
+
+                        # Extract protein name
+                        if 'proteinDescription' in data and 'recommendedName' in data['proteinDescription']:
+                            protein_name = data['proteinDescription']['recommendedName']['fullName']['value']
+                            print(f"Protein name: {protein_name}")
+
+                        # Extract organism
+                        if 'organism' in data and 'scientificName' in data['organism']:
+                            organism = data['organism']['scientificName']
+                            print(f"Organism: {organism}")
+
+                        # Extract gene name if available
+                        if 'genes' in data and len(data['genes']) > 0:
+                            gene_name = data['genes'][0].get('geneName', {}).get('value', '')
+                            if gene_name:
+                                print(f"Gene: {gene_name}")
+
+                except urllib.error.HTTPError as e:
+                    if e.code == 404:
+                        print(f"UniProt ID {uniprot_id} not found")
+                    else:
+                        print(f"HTTP error fetching UniProt data: {e.code}")
+                except urllib.error.URLError as e:
+                    print(f"Network error fetching UniProt data: {e.reason}")
+                except Exception as e:
+                    print(f"Error fetching UniProt data: {e}")
+
+            except Exception as e:
+                print(f"Failed to parse UniRef100 header: {e}")
+
         return {
             'filename': f'{MSAHandler.current_protein}.a3m',
             'seq1': seq1,
             'seq2': seq2,
             'seq2_header': seq2_header,
+            'protein_name': protein_name,
+            'organism': organism,
             'seq1_length': len(seq1.replace('-', '')),
             'seq2_length': len(seq2.replace('-', '')),
             'current_index': MSAHandler.current_sequence_index,
