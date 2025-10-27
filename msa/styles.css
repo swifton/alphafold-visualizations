@@ -290,3 +290,10 @@ main {
     border: 1px solid #ddd;
     border-radius: 4px;
 }
+
+.uniprot-spinner {
+    display: inline-block;
+    font-size: 14px;
+    animation: spin 1s linear infinite;
+    color: #2c3e50;
+}

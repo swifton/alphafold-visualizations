@@ -5,6 +5,10 @@ let CELL_SIZE = 10
 let currentMatrixData = null;
 let currentDiffCountData = null;
 
+// Global state for UniProt polling
+let currentRequestId = null;
+let uniprotPollInterval = null;
+
 // Main application script
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('MSA Visualizations app loaded');
@@ -178,10 +182,21 @@ async function loadSequences(endpoint) {
 
         const data = await response.json();
 
-        // Update the display
+        // Stop any existing UniProt polling
+        if (uniprotPollInterval) {
+            clearInterval(uniprotPollInterval);
+            uniprotPollInterval = null;
+        }
+
+        // Update current request ID
+        currentRequestId = data.request_id;
+
+        // Update the display with initial data (showing spinner if UniProt ID exists)
         let seq2Info = '';
-        if (data.protein_name && data.organism) {
-            seq2Info = `- <strong>${data.protein_name}</strong> (${data.organism})`;
+        if (data.uniprot_id) {
+            seq2Info = `- <span class="uniprot-spinner">⟳</span> <span id="protein-info">Loading...</span>`;
+            // Start polling for UniProt data
+            startUniprotPolling();
         } else if (data.seq2_header) {
             seq2Info = `- ${data.seq2_header}`;
         }
@@ -209,6 +224,38 @@ async function loadSequences(endpoint) {
             <p>Make sure the Python server is running (python3 server.py)</p>
         `;
     }
+}
+
+function startUniprotPolling() {
+    // Poll every 500ms for UniProt data
+    uniprotPollInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/uniprot-poll');
+            if (!response.ok) return;
+
+            const result = await response.json();
+            if (result.success && result.data && result.data.request_id === currentRequestId) {
+                // We got data for the current request
+                const proteinInfo = document.getElementById('protein-info');
+                if (proteinInfo && result.data.protein_name && result.data.organism) {
+                    proteinInfo.innerHTML = `<strong>${result.data.protein_name}</strong> (${result.data.organism})`;
+
+                    // Remove spinner
+                    const spinner = document.querySelector('.uniprot-spinner');
+                    if (spinner) {
+                        spinner.remove();
+                    }
+
+                    // Stop polling
+                    clearInterval(uniprotPollInterval);
+                    uniprotPollInterval = null;
+                    console.log('Received UniProt data');
+                }
+            }
+        } catch (error) {
+            console.error('Error polling UniProt data:', error);
+        }
+    }, 500);
 }
 
 function visualizeAlignment(seq1, seq2) {

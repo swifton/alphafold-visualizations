@@ -8,9 +8,16 @@ import os
 import random
 import time
 import numpy as np
+import threading
+import urllib.request
+import urllib.error
 
 # Configuration
 PROTEIN_NAME = 'insulin'
+
+# Global counter for tracking UniProt requests
+uniprot_request_counter = 0
+uniprot_lock = threading.Lock()
 
 
 def get_available_proteins():
@@ -31,6 +38,62 @@ def get_available_proteins():
             proteins.append(item)
 
     return sorted(proteins)
+
+
+def fetch_uniprot_data(uniprot_id, request_id, handler):
+    """
+    Fetch protein data from UniProt API asynchronously.
+
+    Args:
+        uniprot_id: The UniProt ID to fetch
+        request_id: The request ID to track if this is still the latest request
+        handler: The request handler to send the response through
+    """
+    try:
+        uniprot_url = f"https://rest.uniprot.org/uniprotkb/{uniprot_id}.json"
+        print(f"Fetching UniProt data for {uniprot_id} (request #{request_id})")
+
+        with urllib.request.urlopen(uniprot_url, timeout=5) as response:
+            data = json.loads(response.read().decode('utf-8'))
+
+            protein_name = None
+            organism = None
+
+            # Extract protein name
+            if 'proteinDescription' in data and 'recommendedName' in data['proteinDescription']:
+                protein_name = data['proteinDescription']['recommendedName']['fullName']['value']
+                print(f"Protein name: {protein_name}")
+
+            # Extract organism
+            if 'organism' in data and 'scientificName' in data['organism']:
+                organism = data['organism']['scientificName']
+                print(f"Organism: {organism}")
+
+            # Extract gene name if available
+            if 'genes' in data and len(data['genes']) > 0:
+                gene_name = data['genes'][0].get('geneName', {}).get('value', '')
+                if gene_name:
+                    print(f"Gene: {gene_name}")
+
+            # Check if this is still the most recent request
+            with uniprot_lock:
+                if request_id == uniprot_request_counter:
+                    # Send the response to the client
+                    handler.send_uniprot_update(request_id, protein_name, organism)
+                    print(f"Sent UniProt data for request #{request_id}")
+                else:
+                    print(f"Discarding stale UniProt data for request #{request_id} (current: {uniprot_request_counter})")
+
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            print(f"UniProt ID {uniprot_id} not found")
+        else:
+            print(f"HTTP error fetching UniProt data: {e.code}")
+    except urllib.error.URLError as e:
+        print(f"Network error fetching UniProt data: {e.reason}")
+    except Exception as e:
+        print(f"Error fetching UniProt data: {e}")
+
 
 def build_matrix_from_file(filename):
     """
@@ -162,6 +225,7 @@ class MSAHandler(BaseHTTPRequestHandler):
     # Class variables
     current_sequence_index = 0
     current_protein = PROTEIN_NAME  # Track currently selected protein
+    latest_uniprot_data = {}  # Store latest UniProt data for polling
 
     def do_GET(self):
         if self.path == '/':
@@ -322,6 +386,18 @@ class MSAHandler(BaseHTTPRequestHandler):
 
             self.wfile.write(json.dumps(response).encode())
 
+        elif self.path == '/api/uniprot-poll':
+            # API endpoint to poll for UniProt data
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+
+            response = {
+                'success': True,
+                'data': MSAHandler.latest_uniprot_data
+            }
+            self.wfile.write(json.dumps(response).encode())
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -376,52 +452,28 @@ class MSAHandler(BaseHTTPRequestHandler):
         # Remove lowercase letters from seq2
         seq2 = ''.join(c for c in seq2 if not c.islower())
 
-        # Initialize protein metadata
-        protein_name = None
-        organism = None
+        # Increment request counter and get current request ID
+        global uniprot_request_counter
+        with uniprot_lock:
+            uniprot_request_counter += 1
+            current_request_id = uniprot_request_counter
 
-        # Parse UniRef100 metadata to extract UniProt ID and fetch protein data
+        # Parse UniRef100 metadata to extract UniProt ID and trigger async fetch
+        uniprot_id = None
         if seq2_header.startswith('>UniRef100_'):
             try:
                 # UniRef100 format: >UniRef100_<UniProtID> ...
                 # Extract the UniProt ID (everything after UniRef100_ until the first space)
                 uniprot_id = seq2_header.split('_', 1)[1].split(' ')[0].split('\t')[0]
-                print(f"UniProt ID: {uniprot_id}")
+                print(f"UniProt ID: {uniprot_id} (request #{current_request_id})")
 
-                # Fetch protein information from UniProt API
-                import urllib.request
-                import urllib.error
-
-                uniprot_url = f"https://rest.uniprot.org/uniprotkb/{uniprot_id}.json"
-                try:
-                    with urllib.request.urlopen(uniprot_url, timeout=5) as response:
-                        data = json.loads(response.read().decode('utf-8'))
-
-                        # Extract protein name
-                        if 'proteinDescription' in data and 'recommendedName' in data['proteinDescription']:
-                            protein_name = data['proteinDescription']['recommendedName']['fullName']['value']
-                            print(f"Protein name: {protein_name}")
-
-                        # Extract organism
-                        if 'organism' in data and 'scientificName' in data['organism']:
-                            organism = data['organism']['scientificName']
-                            print(f"Organism: {organism}")
-
-                        # Extract gene name if available
-                        if 'genes' in data and len(data['genes']) > 0:
-                            gene_name = data['genes'][0].get('geneName', {}).get('value', '')
-                            if gene_name:
-                                print(f"Gene: {gene_name}")
-
-                except urllib.error.HTTPError as e:
-                    if e.code == 404:
-                        print(f"UniProt ID {uniprot_id} not found")
-                    else:
-                        print(f"HTTP error fetching UniProt data: {e.code}")
-                except urllib.error.URLError as e:
-                    print(f"Network error fetching UniProt data: {e.reason}")
-                except Exception as e:
-                    print(f"Error fetching UniProt data: {e}")
+                # Start async fetch in background thread
+                fetch_thread = threading.Thread(
+                    target=fetch_uniprot_data,
+                    args=(uniprot_id, current_request_id, self),
+                    daemon=True
+                )
+                fetch_thread.start()
 
             except Exception as e:
                 print(f"Failed to parse UniRef100 header: {e}")
@@ -431,12 +483,26 @@ class MSAHandler(BaseHTTPRequestHandler):
             'seq1': seq1,
             'seq2': seq2,
             'seq2_header': seq2_header,
-            'protein_name': protein_name,
-            'organism': organism,
+            'uniprot_id': uniprot_id,
+            'request_id': current_request_id,
             'seq1_length': len(seq1.replace('-', '')),
             'seq2_length': len(seq2.replace('-', '')),
             'current_index': MSAHandler.current_sequence_index,
             'total_sequences': total_sequences
+        }
+
+    def send_uniprot_update(self, request_id, protein_name, organism):
+        """
+        Send UniProt data update to client via SSE-style response.
+        This is called from the background thread.
+        """
+        # We can't send another response on the same connection, so we'll need
+        # the frontend to poll or use a different approach. Let's store it and
+        # create a new endpoint for the frontend to fetch.
+        MSAHandler.latest_uniprot_data = {
+            'request_id': request_id,
+            'protein_name': protein_name,
+            'organism': organism
         }
 
     def do_POST(self):
