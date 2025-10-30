@@ -597,8 +597,11 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
 
     // Configuration
     const cellSize = CELL_SIZE; // Size of each cell in pixels
-    const width = size * cellSize;
-    const height = size * cellSize;
+    const scaleSize = 30; // Space for axis labels
+    const matrixWidth = size * cellSize;
+    const matrixHeight = size * cellSize;
+    const width = matrixWidth + scaleSize;
+    const height = matrixHeight + scaleSize;
 
     // Set SVG dimensions
     svg.setAttribute('width', width);
@@ -628,14 +631,67 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
         }
     };
 
-    // Render each cell
+    // Draw axis scales
+    // Determine tick interval based on matrix size
+    let tickInterval = 10;
+    if (size > 200) tickInterval = 50;
+    else if (size > 100) tickInterval = 20;
+
+    // Top horizontal scale (column positions)
+    for (let i = 0; i < size; i += tickInterval) {
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', scaleSize + i * cellSize);
+        text.setAttribute('y', scaleSize - 5);
+        text.setAttribute('font-size', '10px');
+        text.setAttribute('font-family', 'monospace');
+        text.setAttribute('fill', '#333');
+        text.setAttribute('text-anchor', 'middle');
+        text.textContent = i + 1; // 1-indexed for user display
+        svg.appendChild(text);
+
+        // Draw tick mark
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tick.setAttribute('x1', scaleSize + i * cellSize);
+        tick.setAttribute('y1', scaleSize - 2);
+        tick.setAttribute('x2', scaleSize + i * cellSize);
+        tick.setAttribute('y2', scaleSize);
+        tick.setAttribute('stroke', '#999');
+        tick.setAttribute('stroke-width', '1');
+        svg.appendChild(tick);
+    }
+
+    // Left vertical scale (row positions)
+    for (let i = 0; i < size; i += tickInterval) {
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', scaleSize - 5);
+        text.setAttribute('y', scaleSize + i * cellSize + cellSize / 2);
+        text.setAttribute('font-size', '10px');
+        text.setAttribute('font-family', 'monospace');
+        text.setAttribute('fill', '#333');
+        text.setAttribute('text-anchor', 'end');
+        text.setAttribute('dominant-baseline', 'middle');
+        text.textContent = i + 1; // 1-indexed for user display
+        svg.appendChild(text);
+
+        // Draw tick mark
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tick.setAttribute('x1', scaleSize - 2);
+        tick.setAttribute('y1', scaleSize + i * cellSize);
+        tick.setAttribute('x2', scaleSize);
+        tick.setAttribute('y2', scaleSize + i * cellSize);
+        tick.setAttribute('stroke', '#999');
+        tick.setAttribute('stroke-width', '1');
+        svg.appendChild(tick);
+    }
+
+    // Render each cell (offset by scaleSize)
     for (let row = 0; row < size; row++) {
         for (let col = 0; col < size; col++) {
             const value = matrix[row][col];
             const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
 
-            rect.setAttribute('x', col * cellSize);
-            rect.setAttribute('y', row * cellSize);
+            rect.setAttribute('x', scaleSize + col * cellSize);
+            rect.setAttribute('y', scaleSize + row * cellSize);
             rect.setAttribute('width', cellSize);
             rect.setAttribute('height', cellSize);
             rect.setAttribute('fill', getColor(value));
@@ -678,7 +734,9 @@ function renderDiffCountSVG(diffCount, size, minValue, maxValue) {
     // Configuration
     const cellSize = CELL_SIZE;
     const cellHeight = 30; // Taller cells for better visibility
-    const width = size * cellSize;
+    const scaleSize = 30; // Space for axis labels (match matrix scale)
+    const barWidth = size * cellSize;
+    const width = barWidth + scaleSize;
     const height = cellHeight;
 
     // Set SVG dimensions
@@ -709,12 +767,12 @@ function renderDiffCountSVG(diffCount, size, minValue, maxValue) {
         }
     };
 
-    // Render each cell
+    // Render each cell (offset by scaleSize to match matrix)
     for (let i = 0; i < size; i++) {
         const value = diffCount[i];
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
 
-        rect.setAttribute('x', i * cellSize);
+        rect.setAttribute('x', scaleSize + i * cellSize);
         rect.setAttribute('y', 0);
         rect.setAttribute('width', cellSize);
         rect.setAttribute('height', cellHeight);
