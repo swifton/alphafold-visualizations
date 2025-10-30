@@ -599,6 +599,13 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
     let fixedRow = null;
     let fixedCol = null;
 
+    // Track drag selection
+    let isDragging = false;
+    let dragStartRow = null;
+    let dragStartCol = null;
+    let dragEndRow = null;
+    let dragEndCol = null;
+
     // Clear previous content
     svg.innerHTML = '';
 
@@ -691,7 +698,7 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
         svg.appendChild(tick);
     }
 
-    // Create highlight rectangle (will be appended after cells to render on top)
+    // Create highlight rectangle for hover (will be appended after cells to render on top)
     const highlightRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     highlightRect.setAttribute('id', 'matrix-highlight');
     highlightRect.setAttribute('fill', 'none');
@@ -699,6 +706,15 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
     highlightRect.setAttribute('stroke-width', '2');
     highlightRect.setAttribute('pointer-events', 'none');
     highlightRect.setAttribute('visibility', 'hidden');
+
+    // Create selection rectangle for drag selection
+    const selectionRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    selectionRect.setAttribute('id', 'matrix-selection');
+    selectionRect.setAttribute('fill', 'rgba(0, 255, 0, 0.1)');
+    selectionRect.setAttribute('stroke', '#00ff00');
+    selectionRect.setAttribute('stroke-width', '2');
+    selectionRect.setAttribute('pointer-events', 'none');
+    selectionRect.setAttribute('visibility', 'hidden');
 
     // Render each cell (offset by scaleSize)
     for (let row = 0; row < size; row++) {
@@ -712,8 +728,36 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
             rect.setAttribute('height', cellSize);
             rect.setAttribute('fill', getColor(value));
 
+            // Add mousedown event to start drag selection
+            rect.addEventListener('mousedown', (event) => {
+                isDragging = true;
+                dragStartRow = row;
+                dragStartCol = col;
+                dragEndRow = row;
+                dragEndCol = col;
+                event.preventDefault();
+            });
+
             // Add hover event to display position and highlight in Mol*
             rect.addEventListener('mouseenter', (event) => {
+                // Update drag selection if dragging
+                if (isDragging) {
+                    dragEndRow = row;
+                    dragEndCol = col;
+
+                    // Update selection rectangle
+                    const minRow = Math.min(dragStartRow, dragEndRow);
+                    const maxRow = Math.max(dragStartRow, dragEndRow);
+                    const minCol = Math.min(dragStartCol, dragEndCol);
+                    const maxCol = Math.max(dragStartCol, dragEndCol);
+
+                    selectionRect.setAttribute('x', scaleSize + minCol * cellSize);
+                    selectionRect.setAttribute('y', scaleSize + minRow * cellSize);
+                    selectionRect.setAttribute('width', (maxCol - minCol + 1) * cellSize);
+                    selectionRect.setAttribute('height', (maxRow - minRow + 1) * cellSize);
+                    selectionRect.setAttribute('visibility', 'visible');
+                    return;
+                }
                 // Check keyboard modifiers to fix row or column
                 let displayRow = row;
                 let displayCol = col;
@@ -758,8 +802,45 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
         }
     }
 
-    // Append highlight rectangle AFTER all cells so it renders on top
+    // Append highlight rectangles AFTER all cells so they render on top
     svg.appendChild(highlightRect);
+    svg.appendChild(selectionRect);
+
+    // Add mouseup handler to finish drag selection
+    svg.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+
+            // Get the selected region bounds
+            const minRow = Math.min(dragStartRow, dragEndRow);
+            const maxRow = Math.max(dragStartRow, dragEndRow);
+            const minCol = Math.min(dragStartCol, dragEndCol);
+            const maxCol = Math.max(dragStartCol, dragEndCol);
+
+            // Collect all unique residue indices in the selection
+            const residues = new Set();
+            for (let r = minRow; r <= maxRow; r++) {
+                residues.add(r);
+            }
+            for (let c = minCol; c <= maxCol; c++) {
+                residues.add(c);
+            }
+
+            // Highlight residues in Molstar
+            highlightRegionInMolstar(Array.from(residues));
+
+            console.log(`Selected region: rows ${minRow}-${maxRow}, cols ${minCol}-${maxCol}`);
+            console.log(`Highlighting ${residues.size} residues in Molstar`);
+        }
+    });
+
+    // Add mouseleave handler to cancel drag if mouse leaves SVG
+    svg.addEventListener('mouseleave', () => {
+        if (isDragging) {
+            isDragging = false;
+            selectionRect.setAttribute('visibility', 'hidden');
+        }
+    });
 
     console.log(`Rendered ${size}x${size} matrix with ${size * size} cells`);
 
@@ -769,6 +850,9 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
 
 let molstarViewer = null;
 let referenceSequence = '';
+
+// Track selected region residues (persist across hovers)
+let selectedRegionResidues = [];
 
 // Amino acid classifications by charge
 const POSITIVE_RESIDUES = ['R', 'H', 'K'];  // Arginine, Histidine, Lysine
@@ -1058,29 +1142,64 @@ async function highlightResiduesInMolstar(residue1, residue2) {
         const pdbResidue1 = residue1 + 1;
         const pdbResidue2 = residue2 + 1;
 
-        // PDBe Molstar uses a simple selection API
         // Clear previous selection
         await molstarViewer.visual.clearSelection();
 
-        // Select both residues with yellow highlighting
-        const selections = [
-            {
+        // Build selections: first add the persistent green region, then yellow hover
+        const selections = [];
+
+        // Add green selection for region (if any)
+        selectedRegionResidues.forEach(residue => {
+            selections.push({
                 struct_asym_id: 'A',
-                start_residue_number: pdbResidue1,
-                end_residue_number: pdbResidue1,
-                color: { r: 255, g: 255, b: 0 }
-            },
-            {
-                struct_asym_id: 'A',
-                start_residue_number: pdbResidue2,
-                end_residue_number: pdbResidue2,
-                color: { r: 255, g: 255, b: 0 }
-            }
-        ];
+                start_residue_number: residue + 1,
+                end_residue_number: residue + 1,
+                color: { r: 0, g: 255, b: 0 }  // Green
+            });
+        });
+
+        // Add yellow highlighting for hover residues
+        selections.push({
+            struct_asym_id: 'A',
+            start_residue_number: pdbResidue1,
+            end_residue_number: pdbResidue1,
+            color: { r: 255, g: 255, b: 0 }  // Yellow
+        });
+        selections.push({
+            struct_asym_id: 'A',
+            start_residue_number: pdbResidue2,
+            end_residue_number: pdbResidue2,
+            color: { r: 255, g: 255, b: 0 }  // Yellow
+        });
 
         await molstarViewer.visual.select({ data: selections });
     } catch (error) {
         console.error('Error highlighting residues in PDBe Molstar:', error);
+    }
+}
+
+async function highlightRegionInMolstar(residues) {
+    if (!molstarViewer || !residues || residues.length === 0) return;
+
+    try {
+        // Store the selected region globally so it persists across hovers
+        selectedRegionResidues = residues;
+
+        // PDB residue numbers are 1-indexed, matrix indices are 0-indexed
+        // Clear previous selection
+        await molstarViewer.visual.clearSelection();
+
+        // Create selection for each residue with green highlighting
+        const selections = residues.map(residue => ({
+            struct_asym_id: 'A',
+            start_residue_number: residue + 1,
+            end_residue_number: residue + 1,
+            color: { r: 0, g: 255, b: 0 }  // Green color
+        }));
+
+        await molstarViewer.visual.select({ data: selections });
+    } catch (error) {
+        console.error('Error highlighting region in PDBe Molstar:', error);
     }
 }
 
@@ -1089,6 +1208,17 @@ async function clearHighlightInMolstar() {
 
     try {
         await molstarViewer.visual.clearSelection();
+
+        // Restore the green selection if any region is selected
+        if (selectedRegionResidues.length > 0) {
+            const selections = selectedRegionResidues.map(residue => ({
+                struct_asym_id: 'A',
+                start_residue_number: residue + 1,
+                end_residue_number: residue + 1,
+                color: { r: 0, g: 255, b: 0 }  // Green
+            }));
+            await molstarViewer.visual.select({ data: selections });
+        }
     } catch (error) {
         console.error('Error clearing highlight in PDBe Molstar:', error);
     }
