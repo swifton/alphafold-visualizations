@@ -9,6 +9,9 @@ let currentDiffCountData = null;
 let currentRequestId = null;
 let uniprotPollInterval = null;
 
+// Track if Molstar has been initialized
+let molstarInitialized = false;
+
 // Main application script
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('MSA Visualizations app loaded');
@@ -52,14 +55,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 matrixVisualization.style.display = 'none';
                 alignmentQualityContainer.style.display = 'none';
 
-                // Reset molstar viewer (will be cleared when reinitializing)
+                // Reset molstar viewer and flag (will be reinitialized when tab is opened)
                 molstarViewer = null;
+                molstarInitialized = false;
 
                 // Reload alignment data for the new protein
                 await loadSequences('/api/msa');
 
-                // Reload matrix data for the new protein (this will also reload PDB in molstar)
+                // Reload matrix data for the new protein
                 await loadMatrix();
+
+                // If the Correlation tab is currently visible, reinitialize Molstar
+                if (correlationContent.classList.contains('active')) {
+                    try {
+                        await fetchReferenceSequence();
+                        await initMolstarViewer();
+                        molstarInitialized = true;
+                    } catch (e) {
+                        console.error('Error reinitializing Molstar after protein change:', e);
+                    }
+                }
 
                 console.log(`Reloaded data for ${selectedProtein}`);
             } else {
@@ -86,7 +101,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         correlationContent.style.display = 'none';
     });
 
-    correlationTab.addEventListener('click', () => {
+    correlationTab.addEventListener('click', async () => {
         // Switch to correlation tab
         correlationTab.classList.add('active');
         alignmentTab.classList.remove('active');
@@ -94,6 +109,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         alignmentContent.classList.remove('active');
         correlationContent.style.display = 'block';
         alignmentContent.style.display = 'none';
+
+        // Initialize Molstar only when the tab is first opened (when it's visible)
+        if (!molstarInitialized) {
+            console.log('Initializing Molstar for the first time (tab is now visible)');
+            try {
+                await fetchReferenceSequence();
+                await initMolstarViewer();
+                molstarInitialized = true;
+            } catch (e) {
+                console.error('Error initializing Molstar:', e);
+            }
+        }
     });
 
     // Load initial sequences
@@ -427,10 +454,24 @@ function calculateCellSize(matrixSize) {
 }
 
 function updateMolstarViewerSize(matrixHeight) {
-    const molstarViewer = document.getElementById('molstar-viewer');
-    if (molstarViewer) {
-        molstarViewer.style.height = `${matrixHeight}px`;
-        molstarViewer.style.width = `${matrixHeight}px`;
+    const molstarViewerElement = document.getElementById('molstar-viewer');
+    if (molstarViewerElement) {
+        molstarViewerElement.style.height = `${matrixHeight}px`;
+        molstarViewerElement.style.width = `${matrixHeight}px`;
+
+        // If Molstar instance exists, trigger a resize after updating the container size
+        if (molstarViewer && molstarViewer.plugin) {
+            setTimeout(() => {
+                try {
+                    if (molstarViewer.plugin.canvas3d) {
+                        molstarViewer.plugin.canvas3d.handleResize();
+                        console.log('Molstar resized after container update');
+                    }
+                } catch (e) {
+                    console.log('Error resizing Molstar:', e);
+                }
+            }, 100);
+        }
     }
 }
 
@@ -530,12 +571,7 @@ async function loadMatrix() {
             // Show residue controls
             document.getElementById('residue-controls').style.display = 'flex';
 
-            // Fetch reference sequence
-            await fetchReferenceSequence();
-
-            // Initialize Mol* viewer
-            await initMolstarViewer();
-
+            // Note: Molstar will be initialized when the Correlation tab is first clicked
             console.log('Matrix visualization displayed');
         } else {
             throw new Error(data.error || 'Failed to generate matrix');
