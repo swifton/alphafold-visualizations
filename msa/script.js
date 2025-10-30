@@ -595,6 +595,10 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
     const svg = document.getElementById('matrix-svg');
     const positionDisplay = document.getElementById('matrix-position');
 
+    // Track fixed row/column with keyboard modifiers
+    let fixedRow = null;
+    let fixedCol = null;
+
     // Clear previous content
     svg.innerHTML = '';
 
@@ -687,6 +691,15 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
         svg.appendChild(tick);
     }
 
+    // Create highlight rectangle (will be appended after cells to render on top)
+    const highlightRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    highlightRect.setAttribute('id', 'matrix-highlight');
+    highlightRect.setAttribute('fill', 'none');
+    highlightRect.setAttribute('stroke', '#000');
+    highlightRect.setAttribute('stroke-width', '2');
+    highlightRect.setAttribute('pointer-events', 'none');
+    highlightRect.setAttribute('visibility', 'hidden');
+
     // Render each cell (offset by scaleSize)
     for (let row = 0; row < size; row++) {
         for (let col = 0; col < size; col++) {
@@ -700,19 +713,53 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
             rect.setAttribute('fill', getColor(value));
 
             // Add hover event to display position and highlight in Mol*
-            rect.addEventListener('mouseenter', () => {
-                positionDisplay.textContent = `Position: (${row}, ${col}) Value: ${value.toFixed(2)}`;
-                highlightResiduesInMolstar(row, col);
+            rect.addEventListener('mouseenter', (event) => {
+                // Check keyboard modifiers to fix row or column
+                let displayRow = row;
+                let displayCol = col;
+
+                if (event.shiftKey) {
+                    // Shift key: fix the column, only row changes
+                    if (fixedCol === null) {
+                        fixedCol = col;
+                    }
+                    displayCol = fixedCol;
+                } else if (event.ctrlKey || event.metaKey) {
+                    // Ctrl/Cmd key: fix the row, only column changes
+                    if (fixedRow === null) {
+                        fixedRow = row;
+                    }
+                    displayRow = fixedRow;
+                } else {
+                    // No modifier: reset fixed values
+                    fixedRow = null;
+                    fixedCol = null;
+                }
+
+                const displayValue = matrix[displayRow][displayCol];
+                positionDisplay.textContent = `Position: (${displayRow}, ${displayCol}) Value: ${displayValue.toFixed(2)}`;
+                highlightResiduesInMolstar(displayRow, displayCol);
+
+                // Update highlight rectangle position
+                highlightRect.setAttribute('x', scaleSize + displayCol * cellSize);
+                highlightRect.setAttribute('y', scaleSize + displayRow * cellSize);
+                highlightRect.setAttribute('width', cellSize);
+                highlightRect.setAttribute('height', cellSize);
+                highlightRect.setAttribute('visibility', 'visible');
             });
 
             rect.addEventListener('mouseleave', () => {
                 positionDisplay.textContent = '';
                 clearHighlightInMolstar();
+                highlightRect.setAttribute('visibility', 'hidden');
             });
 
             svg.appendChild(rect);
         }
     }
+
+    // Append highlight rectangle AFTER all cells so it renders on top
+    svg.appendChild(highlightRect);
 
     console.log(`Rendered ${size}x${size} matrix with ${size * size} cells`);
 
