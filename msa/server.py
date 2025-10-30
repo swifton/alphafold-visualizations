@@ -11,6 +11,7 @@ import numpy as np
 import threading
 import urllib.request
 import urllib.error
+import math
 
 # Configuration
 PROTEIN_NAME = 'insulin'
@@ -190,6 +191,11 @@ def build_matrix_from_file(filename):
 
                 # Normalized value = observed - expected
                 normalized_mutation_matrix[i, j] = (observed - expected) / (var_i * var_j)
+
+                if normalized_mutation_matrix[i, j] < 1: 
+                    normalized_mutation_matrix[i, j] = 0
+                else:
+                    normalized_mutation_matrix[i, j] = math.log(normalized_mutation_matrix[i, j])
 
     return diff_count, normalized_mutation_matrix, alignment_quality
 
