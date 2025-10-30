@@ -517,7 +517,7 @@ async function loadMatrix() {
                     if (i !== j) {
                         totalNonDiagonal++;
                         if (data.matrix[i][j] > threshold90) {
-                            data.matrix[i][j] = 0;
+                            // data.matrix[i][j] = 0;
                             zeroedCount++;
                         }
                     }
@@ -561,6 +561,9 @@ async function loadMatrix() {
 
             // Render the diff_count visualization
             renderDiffCountSVG(data.diff_count, data.size, diffCountMin, diffCountMax);
+
+            // Render the matrix values distribution plot
+            renderMatrixValuesPlot(data.matrix, data.size);
 
             // Render the alignment quality plot in the alignment tab
             renderAlignmentQualityPlot(data.alignment_quality);
@@ -793,6 +796,182 @@ function renderDiffCountSVG(diffCount, size, minValue, maxValue) {
     }
 
     console.log(`Rendered diff_count with ${size} residues`);
+}
+
+function renderMatrixValuesPlot(matrix, size) {
+    const svg = document.getElementById('matrix-values-plot');
+    const container = document.getElementById('matrix-values-plot-container');
+
+    // Clear previous content
+    svg.innerHTML = '';
+
+    // Extract all non-diagonal values from the matrix
+    console.time('Extract matrix values');
+    const values = [];
+    for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size; j++) {
+            if (i !== j) {  // Exclude diagonal
+                values.push(matrix[i][j]);
+            }
+        }
+    }
+    console.timeEnd('Extract matrix values');
+
+    // Sort values in descending order
+    console.time('Sort matrix values');
+    values.sort((a, b) => b - a);
+    console.timeEnd('Sort matrix values');
+    console.log(`Plotting ${values.length} matrix values`);
+
+    // Configuration
+    const width = 1000;
+    const height = 300;
+    const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+
+    // Set SVG dimensions
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+    // Create background
+    const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    background.setAttribute('x', margin.left);
+    background.setAttribute('y', margin.top);
+    background.setAttribute('width', plotWidth);
+    background.setAttribute('height', plotHeight);
+    background.setAttribute('fill', '#f9f9f9');
+    background.setAttribute('stroke', '#ddd');
+    svg.appendChild(background);
+
+    // Calculate scale
+    const maxValue = values[0];
+    const minValue = values[values.length - 1];
+    const xScale = plotWidth / values.length;
+    const yScale = plotHeight / (maxValue - minValue);
+
+    // Draw line plot
+    const points = [];
+    for (let i = 0; i < values.length; i++) {
+        const x = margin.left + i * xScale;
+        const y = margin.top + plotHeight - (values[i] - minValue) * yScale;
+        points.push(`${x},${y}`);
+    }
+
+    const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    polyline.setAttribute('points', points.join(' '));
+    polyline.setAttribute('fill', 'none');
+    polyline.setAttribute('stroke', '#2c3e50');
+    polyline.setAttribute('stroke-width', '1.5');
+    svg.appendChild(polyline);
+
+    // Draw axes
+    // Y-axis
+    const yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    yAxis.setAttribute('x1', margin.left);
+    yAxis.setAttribute('y1', margin.top);
+    yAxis.setAttribute('x2', margin.left);
+    yAxis.setAttribute('y2', margin.top + plotHeight);
+    yAxis.setAttribute('stroke', '#333');
+    yAxis.setAttribute('stroke-width', '2');
+    svg.appendChild(yAxis);
+
+    // X-axis
+    const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    xAxis.setAttribute('x1', margin.left);
+    xAxis.setAttribute('y1', margin.top + plotHeight);
+    xAxis.setAttribute('x2', margin.left + plotWidth);
+    xAxis.setAttribute('y2', margin.top + plotHeight);
+    xAxis.setAttribute('stroke', '#333');
+    xAxis.setAttribute('stroke-width', '2');
+    svg.appendChild(xAxis);
+
+    // Y-axis labels
+    const numYTicks = 5;
+    for (let i = 0; i <= numYTicks; i++) {
+        const value = minValue + (maxValue - minValue) * i / numYTicks;
+        const y = margin.top + plotHeight - (value - minValue) * yScale;
+
+        // Tick mark
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tick.setAttribute('x1', margin.left - 5);
+        tick.setAttribute('y1', y);
+        tick.setAttribute('x2', margin.left);
+        tick.setAttribute('y2', y);
+        tick.setAttribute('stroke', '#333');
+        tick.setAttribute('stroke-width', '1');
+        svg.appendChild(tick);
+
+        // Label
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', margin.left - 10);
+        label.setAttribute('y', y);
+        label.setAttribute('text-anchor', 'end');
+        label.setAttribute('dominant-baseline', 'middle');
+        label.setAttribute('font-size', '12px');
+        label.setAttribute('font-family', 'sans-serif');
+        label.setAttribute('fill', '#333');
+        label.textContent = value.toFixed(2);
+        svg.appendChild(label);
+    }
+
+    // X-axis labels
+    const numXTicks = 5;
+    for (let i = 0; i <= numXTicks; i++) {
+        const index = Math.floor(values.length * i / numXTicks);
+        const x = margin.left + index * xScale;
+
+        // Tick mark
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tick.setAttribute('x1', x);
+        tick.setAttribute('y1', margin.top + plotHeight);
+        tick.setAttribute('x2', x);
+        tick.setAttribute('y2', margin.top + plotHeight + 5);
+        tick.setAttribute('stroke', '#333');
+        tick.setAttribute('stroke-width', '1');
+        svg.appendChild(tick);
+
+        // Label
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', x);
+        label.setAttribute('y', margin.top + plotHeight + 20);
+        label.setAttribute('text-anchor', 'middle');
+        label.setAttribute('font-size', '12px');
+        label.setAttribute('font-family', 'sans-serif');
+        label.setAttribute('fill', '#333');
+        label.textContent = index;
+        svg.appendChild(label);
+    }
+
+    // Axis titles
+    // Y-axis title
+    const yTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    yTitle.setAttribute('x', -height / 2);
+    yTitle.setAttribute('y', 15);
+    yTitle.setAttribute('transform', 'rotate(-90)');
+    yTitle.setAttribute('text-anchor', 'middle');
+    yTitle.setAttribute('font-size', '14px');
+    yTitle.setAttribute('font-family', 'sans-serif');
+    yTitle.setAttribute('fill', '#333');
+    yTitle.textContent = 'Matrix Value';
+    svg.appendChild(yTitle);
+
+    // X-axis title
+    const xTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    xTitle.setAttribute('x', margin.left + plotWidth / 2);
+    xTitle.setAttribute('y', height - 5);
+    xTitle.setAttribute('text-anchor', 'middle');
+    xTitle.setAttribute('font-size', '14px');
+    xTitle.setAttribute('font-family', 'sans-serif');
+    xTitle.setAttribute('fill', '#333');
+    xTitle.textContent = 'Sorted Index (Descending)';
+    svg.appendChild(xTitle);
+
+    // Show the container
+    container.style.display = 'block';
+
+    console.log(`Matrix values plot rendered`);
 }
 
 async function highlightSingleResidueInMolstar(residue) {

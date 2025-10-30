@@ -297,3 +297,24 @@ main {
     animation: spin 1s linear infinite;
     color: #2c3e50;
 }
+
+#matrix-values-plot-container {
+    margin-top: 2rem;
+    padding: 1rem;
+    background-color: white;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+#matrix-values-plot-container h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+#matrix-values-plot {
+    width: 100%;
+    height: auto;
+    display: block;
+}

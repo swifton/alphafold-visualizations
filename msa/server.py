@@ -148,7 +148,7 @@ def build_matrix_from_file(filename):
         # Exclude low quality matches
         if alignment_percentage < 0.40:
             skipped_sequences += 1
-            continue
+            # continue
 
         # Save the alignment quality for this sequence
         alignment_quality.append(aligned_count)
