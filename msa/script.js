@@ -710,8 +710,8 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
     // Create selection rectangle for drag selection
     const selectionRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     selectionRect.setAttribute('id', 'matrix-selection');
-    selectionRect.setAttribute('fill', 'rgba(0, 255, 0, 0.1)');
-    selectionRect.setAttribute('stroke', '#00ff00');
+    selectionRect.setAttribute('fill', 'rgba(255, 165, 0, 0.1)');
+    selectionRect.setAttribute('stroke', '#ffa500');
     selectionRect.setAttribute('stroke-width', '2');
     selectionRect.setAttribute('pointer-events', 'none');
     selectionRect.setAttribute('visibility', 'hidden');
@@ -1158,13 +1158,13 @@ async function highlightResiduesInMolstar(residue1, residue2) {
         // Build selections: first add the persistent green region, then yellow hover
         const selections = [];
 
-        // Add green selection for region (if any)
+        // Add orange selection for region (if any)
         selectedRegionResidues.forEach(residue => {
             selections.push({
                 struct_asym_id: 'A',
                 start_residue_number: residue + 1,
                 end_residue_number: residue + 1,
-                color: { r: 0, g: 255, b: 0 }  // Green
+                color: { r: 255, g: 165, b: 0 }  // Orange
             });
         });
 
@@ -1199,12 +1199,12 @@ async function highlightRegionInMolstar(residues) {
         // Clear previous selection
         await molstarViewer.visual.clearSelection();
 
-        // Create selection for each residue with green highlighting
+        // Create selection for each residue with orange highlighting
         const selections = residues.map(residue => ({
             struct_asym_id: 'A',
             start_residue_number: residue + 1,
             end_residue_number: residue + 1,
-            color: { r: 0, g: 255, b: 0 }  // Green color
+            color: { r: 255, g: 165, b: 0 }  // Orange color
         }));
 
         await molstarViewer.visual.select({ data: selections });
@@ -1219,13 +1219,13 @@ async function clearHighlightInMolstar() {
     try {
         await molstarViewer.visual.clearSelection();
 
-        // Restore the green selection if any region is selected
+        // Restore the orange selection if any region is selected
         if (selectedRegionResidues.length > 0) {
             const selections = selectedRegionResidues.map(residue => ({
                 struct_asym_id: 'A',
                 start_residue_number: residue + 1,
                 end_residue_number: residue + 1,
-                color: { r: 0, g: 255, b: 0 }  // Green
+                color: { r: 255, g: 165, b: 0 }  // Orange
             }));
             await molstarViewer.visual.select({ data: selections });
         }
