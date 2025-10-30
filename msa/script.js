@@ -806,31 +806,41 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
     svg.appendChild(highlightRect);
     svg.appendChild(selectionRect);
 
-    // Add mouseup handler to finish drag selection
+    // Add mouseup handler to finish drag selection or clear selection on click
     svg.addEventListener('mouseup', () => {
         if (isDragging) {
             isDragging = false;
 
-            // Get the selected region bounds
-            const minRow = Math.min(dragStartRow, dragEndRow);
-            const maxRow = Math.max(dragStartRow, dragEndRow);
-            const minCol = Math.min(dragStartCol, dragEndCol);
-            const maxCol = Math.max(dragStartCol, dragEndCol);
+            // Check if this was a click (start == end) or a drag
+            if (dragStartRow === dragEndRow && dragStartCol === dragEndCol) {
+                // Single click - clear the selection
+                selectedRegionResidues = [];
+                selectionRect.setAttribute('visibility', 'hidden');
+                clearHighlightInMolstar();
+                console.log('Selection cleared');
+            } else {
+                // Drag - create selection
+                // Get the selected region bounds
+                const minRow = Math.min(dragStartRow, dragEndRow);
+                const maxRow = Math.max(dragStartRow, dragEndRow);
+                const minCol = Math.min(dragStartCol, dragEndCol);
+                const maxCol = Math.max(dragStartCol, dragEndCol);
 
-            // Collect all unique residue indices in the selection
-            const residues = new Set();
-            for (let r = minRow; r <= maxRow; r++) {
-                residues.add(r);
+                // Collect all unique residue indices in the selection
+                const residues = new Set();
+                for (let r = minRow; r <= maxRow; r++) {
+                    residues.add(r);
+                }
+                for (let c = minCol; c <= maxCol; c++) {
+                    residues.add(c);
+                }
+
+                // Highlight residues in Molstar
+                highlightRegionInMolstar(Array.from(residues));
+
+                console.log(`Selected region: rows ${minRow}-${maxRow}, cols ${minCol}-${maxCol}`);
+                console.log(`Highlighting ${residues.size} residues in Molstar`);
             }
-            for (let c = minCol; c <= maxCol; c++) {
-                residues.add(c);
-            }
-
-            // Highlight residues in Molstar
-            highlightRegionInMolstar(Array.from(residues));
-
-            console.log(`Selected region: rows ${minRow}-${maxRow}, cols ${minCol}-${maxCol}`);
-            console.log(`Highlighting ${residues.size} residues in Molstar`);
         }
     });
 
