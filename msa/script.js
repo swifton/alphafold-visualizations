@@ -12,6 +12,9 @@ let uniprotPollInterval = null;
 // Track if Molstar has been initialized
 let molstarInitialized = false;
 
+// Track hover state for Molstar coloring
+let hoverResidues = [];
+
 // Main application script
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('MSA Visualizations app loaded');
@@ -1144,45 +1147,57 @@ async function highlightSingleResidueInMolstar(residue) {
     }
 }
 
+// Unified function to apply all Molstar colors
+async function applyMolstarColors() {
+    if (!molstarViewer) return;
+
+    try {
+        await molstarViewer.visual.clearSelection();
+
+        const selections = [];
+
+        // Get sequence length to color all residues
+        const seqLength = currentMatrixData ? currentMatrixData.size : 0;
+
+        if (seqLength > 0) {
+            // Color all residues
+            for (let i = 0; i < seqLength; i++) {
+                const residueNum = i + 1;  // 1-indexed for PDB
+
+                // Determine color based on state
+                let color;
+                if (hoverResidues.includes(i)) {
+                    color = { r: 255, g: 255, b: 0 };  // Yellow for hover
+                } else if (selectedRegionResidues.includes(i)) {
+                    color = { r: 0, g: 255, b: 0 };  // Green for selection
+                } else {
+                    color = { r: 128, g: 0, b: 128 };  // Purple for base color
+                }
+
+                selections.push({
+                    struct_asym_id: 'A',
+                    start_residue_number: residueNum,
+                    end_residue_number: residueNum,
+                    color: color
+                });
+            }
+        }
+
+        await molstarViewer.visual.select({ data: selections });
+    } catch (error) {
+        console.error('Error applying Molstar colors:', error);
+    }
+}
+
 async function highlightResiduesInMolstar(residue1, residue2) {
     if (!molstarViewer) return;
 
     try {
-        // PDB residue numbers are 1-indexed, matrix indices are 0-indexed
-        const pdbResidue1 = residue1 + 1;
-        const pdbResidue2 = residue2 + 1;
+        // Update hover state
+        hoverResidues = [residue1, residue2];
 
-        // Clear previous selection
-        await molstarViewer.visual.clearSelection();
-
-        // Build selections: first add the persistent green region, then yellow hover
-        const selections = [];
-
-        // Add orange selection for region (if any)
-        selectedRegionResidues.forEach(residue => {
-            selections.push({
-                struct_asym_id: 'A',
-                start_residue_number: residue + 1,
-                end_residue_number: residue + 1,
-                color: { r: 255, g: 165, b: 0 }  // Orange
-            });
-        });
-
-        // Add yellow highlighting for hover residues
-        selections.push({
-            struct_asym_id: 'A',
-            start_residue_number: pdbResidue1,
-            end_residue_number: pdbResidue1,
-            color: { r: 255, g: 255, b: 0 }  // Yellow
-        });
-        selections.push({
-            struct_asym_id: 'A',
-            start_residue_number: pdbResidue2,
-            end_residue_number: pdbResidue2,
-            color: { r: 255, g: 255, b: 0 }  // Yellow
-        });
-
-        await molstarViewer.visual.select({ data: selections });
+        // Apply all colors
+        await applyMolstarColors();
     } catch (error) {
         console.error('Error highlighting residues in PDBe Molstar:', error);
     }
@@ -1195,19 +1210,8 @@ async function highlightRegionInMolstar(residues) {
         // Store the selected region globally so it persists across hovers
         selectedRegionResidues = residues;
 
-        // PDB residue numbers are 1-indexed, matrix indices are 0-indexed
-        // Clear previous selection
-        await molstarViewer.visual.clearSelection();
-
-        // Create selection for each residue with orange highlighting
-        const selections = residues.map(residue => ({
-            struct_asym_id: 'A',
-            start_residue_number: residue + 1,
-            end_residue_number: residue + 1,
-            color: { r: 255, g: 165, b: 0 }  // Orange color
-        }));
-
-        await molstarViewer.visual.select({ data: selections });
+        // Apply all colors
+        await applyMolstarColors();
     } catch (error) {
         console.error('Error highlighting region in PDBe Molstar:', error);
     }
@@ -1217,18 +1221,11 @@ async function clearHighlightInMolstar() {
     if (!molstarViewer) return;
 
     try {
-        await molstarViewer.visual.clearSelection();
+        // Clear hover state
+        hoverResidues = [];
 
-        // Restore the orange selection if any region is selected
-        if (selectedRegionResidues.length > 0) {
-            const selections = selectedRegionResidues.map(residue => ({
-                struct_asym_id: 'A',
-                start_residue_number: residue + 1,
-                end_residue_number: residue + 1,
-                color: { r: 255, g: 165, b: 0 }  // Orange
-            }));
-            await molstarViewer.visual.select({ data: selections });
-        }
+        // Apply all colors
+        await applyMolstarColors();
     } catch (error) {
         console.error('Error clearing highlight in PDBe Molstar:', error);
     }
@@ -1269,8 +1266,10 @@ async function initMolstarViewer() {
         await viewerInstance.render(newViewerElement, options);
         molstarViewer = viewerInstance;
 
-        console.log('PDBe Molstar viewer initialized and structure loaded');
+        // Apply initial color scheme (purple base, green selection, yellow hover)
+        await applyMolstarColors();
 
+        console.log('PDBe Molstar viewer initialized and structure loaded');
     } catch (error) {
         console.error('Error initializing PDBe Molstar viewer:', error);
         throw error;
