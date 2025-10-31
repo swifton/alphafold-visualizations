@@ -93,14 +93,14 @@ main {
     display: block;
 }
 
-#controls, #controls-correlation, #residue-controls {
+#controls, #controls-correlation {
     margin: 1rem 0;
     display: flex;
     gap: 1rem;
     align-items: center;
 }
 
-#previous-btn, #next-btn, #random-btn, #matrix-btn, #positive-btn, #negative-btn, #clear-highlight-btn {
+#previous-btn, #next-btn, #random-btn, #matrix-btn {
     background-color: #2c3e50;
     color: white;
     border: none;
@@ -111,41 +111,17 @@ main {
     transition: background-color 0.2s;
 }
 
-#previous-btn:hover, #next-btn:hover, #random-btn:hover, #matrix-btn:hover, #positive-btn:hover, #negative-btn:hover, #clear-highlight-btn:hover {
+#previous-btn:hover, #next-btn:hover, #random-btn:hover, #matrix-btn:hover {
     background-color: #34495e;
 }
 
-#previous-btn:active, #next-btn:active, #random-btn:active, #matrix-btn:active, #positive-btn:active, #negative-btn:active, #clear-highlight-btn:active {
+#previous-btn:active, #next-btn:active, #random-btn:active, #matrix-btn:active {
     background-color: #1a252f;
 }
 
 #matrix-btn:disabled {
     background-color: #95a5a6;
     cursor: not-allowed;
-}
-
-#positive-btn {
-    background-color: #3498db;
-}
-
-#positive-btn:hover {
-    background-color: #2980b9;
-}
-
-#negative-btn {
-    background-color: #e74c3c;
-}
-
-#negative-btn:hover {
-    background-color: #c0392b;
-}
-
-#clear-highlight-btn {
-    background-color: #95a5a6;
-}
-
-#clear-highlight-btn:hover {
-    background-color: #7f8c8d;
 }
 
 .spinner {
@@ -208,11 +184,6 @@ main {
     position: relative;
     border: 1px solid #ddd;
     border-radius: 4px;
-}
-
-.matrix-right #residue-controls {
-    margin-top: 1rem;
-    justify-content: center;
 }
 
 .msp-viewport-controls { display: none !important; }

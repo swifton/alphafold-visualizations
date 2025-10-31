@@ -150,22 +150,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadSequences('/api/random');
     });
 
-    // Add event listeners for residue highlight buttons
-    const positiveBtn = document.getElementById('positive-btn');
-    positiveBtn.addEventListener('click', () => {
-        highlightResiduesByProperty('positive');
-    });
-
-    const negativeBtn = document.getElementById('negative-btn');
-    negativeBtn.addEventListener('click', () => {
-        highlightResiduesByProperty('negative');
-    });
-
-    const clearHighlightBtn = document.getElementById('clear-highlight-btn');
-    clearHighlightBtn.addEventListener('click', () => {
-        clearHighlightInMolstar();
-    });
-
     // Add window resize handler to recalculate cell size and re-render matrix
     let resizeTimeout;
     window.addEventListener('resize', () => {
@@ -574,9 +558,6 @@ async function loadMatrix() {
 
             matrixVisualization.style.display = 'block';
 
-            // Show residue controls
-            document.getElementById('residue-controls').style.display = 'flex';
-
             // Note: Molstar will be initialized when the Correlation tab is first clicked
             console.log('Matrix visualization displayed');
         } else {
@@ -866,10 +847,6 @@ let referenceSequence = '';
 
 // Track selected region residues (persist across hovers)
 let selectedRegionResidues = [];
-
-// Amino acid classifications by charge
-const POSITIVE_RESIDUES = ['R', 'H', 'K'];  // Arginine, Histidine, Lysine
-const NEGATIVE_RESIDUES = ['D', 'E'];  // Aspartic acid, Glutamic acid
 
 function renderDiffCountSVG(diffCount, size, minValue, maxValue) {
     const svg = document.getElementById('diff-count-svg');
@@ -1295,55 +1272,6 @@ async function fetchReferenceSequence() {
         }
     } catch (error) {
         console.error('Error fetching reference sequence:', error);
-    }
-}
-
-async function highlightResiduesByProperty(property) {
-    if (!molstarViewer) {
-        console.warn('Molstar viewer not initialized');
-        return;
-    }
-
-    if (!referenceSequence) {
-        console.warn('Reference sequence not loaded');
-        return;
-    }
-
-    try {
-        // Determine which residues to highlight
-        const targetResidues = property === 'positive' ? POSITIVE_RESIDUES : NEGATIVE_RESIDUES;
-
-        // Find all positions in the reference sequence that match
-        const selections = [];
-        for (let i = 0; i < referenceSequence.length; i++) {
-            const residue = referenceSequence[i];
-            if (targetResidues.includes(residue)) {
-                // PDB residue numbers are 1-indexed
-                const pdbResidue = i + 1;
-                selections.push({
-                    struct_asym_id: 'A',
-                    start_residue_number: pdbResidue,
-                    end_residue_number: pdbResidue,
-                    color: property === 'positive'
-                        ? { r: 52, g: 152, b: 219 }  // Blue for positive charge
-                        : { r: 231, g: 76, b: 60 }  // Red for negative charge
-                });
-            }
-        }
-
-        // Clear previous selection
-        await molstarViewer.visual.clearSelection();
-
-        // Apply the selection
-        if (selections.length > 0) {
-            await molstarViewer.visual.select({ data: selections });
-            console.log(`Highlighted ${selections.length} ${property} charged residues`);
-        } else {
-            console.log(`No ${property} charged residues found`);
-        }
-
-    } catch (error) {
-        console.error(`Error highlighting ${property} charged residues:`, error);
     }
 }
 
