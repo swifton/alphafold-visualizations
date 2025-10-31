@@ -12,13 +12,56 @@ import threading
 import urllib.request
 import urllib.error
 import math
+import uuid
+from http.cookies import SimpleCookie
 
 # Configuration
 PROTEIN_NAME = 'insulin'
 
+# Session management
+sessions = {}  # session_id -> session_data
+session_lock = threading.Lock()
+SESSION_TIMEOUT = 3600  # 1 hour in seconds
+
 # Global counter for tracking UniProt requests
 uniprot_request_counter = 0
 uniprot_lock = threading.Lock()
+
+
+def create_session():
+    """Create a new session with a unique ID."""
+    session_id = str(uuid.uuid4())
+    with session_lock:
+        sessions[session_id] = {
+            'protein_name': PROTEIN_NAME,
+            'last_access': time.time(),
+            'matrix_cache': None,
+            'sequences': None,
+            'current_index': 0,
+            'uniprot_data': {},
+            'uniprot_request_id': None
+        }
+    return session_id
+
+
+def get_session(session_id):
+    """Get session data by ID, updating last access time."""
+    with session_lock:
+        if session_id in sessions:
+            sessions[session_id]['last_access'] = time.time()
+            return sessions[session_id]
+    return None
+
+
+def cleanup_old_sessions():
+    """Remove sessions that haven't been accessed recently."""
+    current_time = time.time()
+    with session_lock:
+        expired = [sid for sid, data in sessions.items()
+                   if current_time - data['last_access'] > SESSION_TIMEOUT]
+        for sid in expired:
+            print(f"Cleaning up expired session: {sid}")
+            del sessions[sid]
 
 
 def get_available_proteins():
@@ -41,14 +84,14 @@ def get_available_proteins():
     return sorted(proteins)
 
 
-def fetch_uniprot_data(uniprot_id, request_id, handler):
+def fetch_uniprot_data(uniprot_id, request_id, session_id):
     """
     Fetch protein data from UniProt API asynchronously.
 
     Args:
         uniprot_id: The UniProt ID to fetch
         request_id: The request ID to track if this is still the latest request
-        handler: The request handler to send the response through
+        session_id: The session ID to store the result
     """
     try:
         uniprot_url = f"https://rest.uniprot.org/uniprotkb/{uniprot_id}.json"
@@ -76,14 +119,17 @@ def fetch_uniprot_data(uniprot_id, request_id, handler):
                 if gene_name:
                     print(f"Gene: {gene_name}")
 
-            # Check if this is still the most recent request
-            with uniprot_lock:
-                if request_id == uniprot_request_counter:
-                    # Send the response to the client
-                    handler.send_uniprot_update(request_id, protein_name, organism)
-                    print(f"Sent UniProt data for request #{request_id}")
-                else:
-                    print(f"Discarding stale UniProt data for request #{request_id} (current: {uniprot_request_counter})")
+            # Store in session
+            session = get_session(session_id)
+            if session and session['uniprot_request_id'] == request_id:
+                session['uniprot_data'] = {
+                    'request_id': request_id,
+                    'protein_name': protein_name,
+                    'organism': organism
+                }
+                print(f"Stored UniProt data for request #{request_id} in session {session_id}")
+            else:
+                print(f"Discarding stale UniProt data for request #{request_id}")
 
     except urllib.error.HTTPError as e:
         if e.code == 404:
@@ -228,16 +274,36 @@ def get_matrix_data(filename):
 
 
 class MSAHandler(BaseHTTPRequestHandler):
-    # Class variables
-    current_sequence_index = 0
-    current_protein = PROTEIN_NAME  # Track currently selected protein
-    latest_uniprot_data = {}  # Store latest UniProt data for polling
+
+    def get_session_id(self):
+        """Extract session ID from cookie or create a new one."""
+        cookie_string = self.headers.get('Cookie')
+        if cookie_string:
+            cookie = SimpleCookie()
+            cookie.load(cookie_string)
+            if 'session_id' in cookie:
+                session_id = cookie['session_id'].value
+                # Verify session exists
+                if get_session(session_id):
+                    return session_id
+
+        # Create new session
+        session_id = create_session()
+        return session_id
+
+    def send_session_cookie(self, session_id):
+        """Send session cookie in response headers."""
+        self.send_header('Set-Cookie', f'session_id={session_id}; Path=/; Max-Age=3600; SameSite=Lax')
 
     def do_GET(self):
         if self.path == '/':
             # Serve the main HTML page with protein list injected
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
+            self.send_session_cookie(session_id)
             self.end_headers()
 
             # Get available proteins
@@ -251,7 +317,7 @@ class MSAHandler(BaseHTTPRequestHandler):
             protein_data_script = f'''
                     <script>
                         window.AVAILABLE_PROTEINS = {json.dumps(proteins)};
-                        window.CURRENT_PROTEIN = {json.dumps(MSAHandler.current_protein)};
+                        window.CURRENT_PROTEIN = {json.dumps(session['protein_name'])};
                     </script>
                 </head>'''
             html_content = html_content.replace('</head>', protein_data_script)
@@ -276,84 +342,115 @@ class MSAHandler(BaseHTTPRequestHandler):
 
         elif self.path == f'/pdb':
             # Serve PDB file from examples folder
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
             self.send_response(200)
             self.send_header('Content-type', 'chemical/x-pdb')
             self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_session_cookie(session_id)
             self.end_headers()
-            pdb_path = f'examples/{MSAHandler.current_protein}/{MSAHandler.current_protein}.pdb'
+
+            pdb_path = f'examples/{session["protein_name"]}/{session["protein_name"]}.pdb'
             with open(pdb_path, 'rb') as f:
                 self.wfile.write(f.read())
 
         elif self.path == '/api/msa':
             # API endpoint to get MSA file content with alignment
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_session_cookie(session_id)
             self.end_headers()
 
             # Get the current sequence based on index
-            response = self.get_sequence_alignment()
+            response = self.get_sequence_alignment(session, session_id)
             self.wfile.write(json.dumps(response).encode())
 
         elif self.path == '/api/previous':
             # API endpoint to get the previous sequence
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_session_cookie(session_id)
             self.end_headers()
 
             # Decrement the sequence index
-            MSAHandler.current_sequence_index -= 1
+            session['current_index'] -= 1
 
             # Get the previous sequence
-            response = self.get_sequence_alignment()
+            response = self.get_sequence_alignment(session, session_id)
             self.wfile.write(json.dumps(response).encode())
 
         elif self.path == '/api/next':
             # API endpoint to get the next sequence
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_session_cookie(session_id)
             self.end_headers()
 
             # Increment the sequence index
-            MSAHandler.current_sequence_index += 1
+            session['current_index'] += 1
 
             # Get the next sequence
-            response = self.get_sequence_alignment()
+            response = self.get_sequence_alignment(session, session_id)
             self.wfile.write(json.dumps(response).encode())
 
         elif self.path == '/api/random':
             # API endpoint to get a random sequence
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_session_cookie(session_id)
             self.end_headers()
 
             # Set a random sequence index
             # First, we need to know the total number of sequences
-            a3m_path = f'examples/{MSAHandler.current_protein}/{MSAHandler.current_protein}.a3m'
+            a3m_path = f'examples/{session["protein_name"]}/{session["protein_name"]}.a3m'
             with open(a3m_path, 'r') as f:
                 lines = f.readlines()
                 total_sequences = (len(lines) - 3) // 2
 
             # Generate random index
-            MSAHandler.current_sequence_index = random.randint(0, total_sequences - 1)
+            session['current_index'] = random.randint(0, total_sequences - 1)
 
             # Get the random sequence
-            response = self.get_sequence_alignment()
+            response = self.get_sequence_alignment(session, session_id)
             self.wfile.write(json.dumps(response).encode())
 
         elif self.path == '/api/matrix':
             # API endpoint to get the matrix data
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_session_cookie(session_id)
             self.end_headers()
 
             try:
-                # Get the matrix data
-                a3m_path = f'examples/{MSAHandler.current_protein}/{MSAHandler.current_protein}.a3m'
-                matrix_data = get_matrix_data(a3m_path)
-                response = {
-                    'success': True,
-                    **matrix_data
-                }
+                # Check if we have cached matrix data
+                if session.get('matrix_cache'):
+                    response = session['matrix_cache']
+                else:
+                    # Get the matrix data
+                    a3m_path = f'examples/{session["protein_name"]}/{session["protein_name"]}.a3m'
+                    matrix_data = get_matrix_data(a3m_path)
+                    response = {
+                        'success': True,
+                        **matrix_data
+                    }
+                    # Cache it in session
+                    session['matrix_cache'] = response
             except Exception as e:
                 response = {
                     'success': False,
@@ -394,13 +491,17 @@ class MSAHandler(BaseHTTPRequestHandler):
 
         elif self.path == '/api/uniprot-poll':
             # API endpoint to poll for UniProt data
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_session_cookie(session_id)
             self.end_headers()
 
             response = {
                 'success': True,
-                'data': MSAHandler.latest_uniprot_data
+                'data': session.get('uniprot_data', {})
             }
             self.wfile.write(json.dumps(response).encode())
 
@@ -409,7 +510,7 @@ class MSAHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'Not Found')
 
-    def get_sequence_alignment(self):
+    def get_sequence_alignment(self, session, session_id):
         """
         Get alignment for current sequence index.
         Reference sequence is always line 3.
@@ -422,9 +523,9 @@ class MSAHandler(BaseHTTPRequestHandler):
 
         # Calculate the target line for seq2
         # Sequence lines are at indices: 2 (reference), 4, 6, 8, 10, 12, ...
-        target_line_index = 4 + (MSAHandler.current_sequence_index * 2)
+        target_line_index = 4 + (session['current_index'] * 2)
 
-        a3m_path = f'examples/{MSAHandler.current_protein}/{MSAHandler.current_protein}.a3m'
+        a3m_path = f'examples/{session["protein_name"]}/{session["protein_name"]}.a3m'
         with open(a3m_path, 'r') as f:
             lines = f.readlines()
             total_lines = len(lines)
@@ -437,13 +538,13 @@ class MSAHandler(BaseHTTPRequestHandler):
             total_sequences = (total_lines - 3) // 2
 
             # Check if we've gone past the end, wrap around to the beginning
-            if MSAHandler.current_sequence_index >= total_sequences:
-                MSAHandler.current_sequence_index = 0
+            if session['current_index'] >= total_sequences:
+                session['current_index'] = 0
                 target_line_index = 4
             # Check if we've gone before the beginning, wrap around to the end
-            elif MSAHandler.current_sequence_index < 0:
-                MSAHandler.current_sequence_index = total_sequences - 1
-                target_line_index = 4 + (MSAHandler.current_sequence_index * 2)
+            elif session['current_index'] < 0:
+                session['current_index'] = total_sequences - 1
+                target_line_index = 4 + (session['current_index'] * 2)
 
             # Get the target sequence
             if target_line_index < total_lines:
@@ -476,7 +577,7 @@ class MSAHandler(BaseHTTPRequestHandler):
                 # Start async fetch in background thread
                 fetch_thread = threading.Thread(
                     target=fetch_uniprot_data,
-                    args=(uniprot_id, current_request_id, self),
+                    args=(uniprot_id, current_request_id, session_id),
                     daemon=True
                 )
                 fetch_thread.start()
@@ -484,8 +585,11 @@ class MSAHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 print(f"Failed to parse UniRef100 header: {e}")
 
+        # Store request ID in session for UniProt polling
+        session['uniprot_request_id'] = current_request_id
+
         return {
-            'filename': f'{MSAHandler.current_protein}.a3m',
+            'filename': f'{session["protein_name"]}.a3m',
             'seq1': seq1,
             'seq2': seq2,
             'seq2_header': seq2_header,
@@ -493,27 +597,16 @@ class MSAHandler(BaseHTTPRequestHandler):
             'request_id': current_request_id,
             'seq1_length': len(seq1.replace('-', '')),
             'seq2_length': len(seq2.replace('-', '')),
-            'current_index': MSAHandler.current_sequence_index,
+            'current_index': session['current_index'],
             'total_sequences': total_sequences
-        }
-
-    def send_uniprot_update(self, request_id, protein_name, organism):
-        """
-        Send UniProt data update to client via SSE-style response.
-        This is called from the background thread.
-        """
-        # We can't send another response on the same connection, so we'll need
-        # the frontend to poll or use a different approach. Let's store it and
-        # create a new endpoint for the frontend to fetch.
-        MSAHandler.latest_uniprot_data = {
-            'request_id': request_id,
-            'protein_name': protein_name,
-            'organism': organism
         }
 
     def do_POST(self):
         if self.path == '/api/select-protein':
             # Handle protein selection
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode('utf-8'))
@@ -521,13 +614,16 @@ class MSAHandler(BaseHTTPRequestHandler):
             selected_protein = data.get('protein')
 
             if selected_protein:
-                # Update the current protein
-                MSAHandler.current_protein = selected_protein
+                # Update the session protein
+                session['protein_name'] = selected_protein
                 # Reset sequence index when switching proteins
-                MSAHandler.current_sequence_index = 0
+                session['current_index'] = 0
+                # Clear matrix cache
+                session['matrix_cache'] = None
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
+                self.send_session_cookie(session_id)
                 self.end_headers()
 
                 response = {
@@ -536,10 +632,11 @@ class MSAHandler(BaseHTTPRequestHandler):
                 }
                 self.wfile.write(json.dumps(response).encode('utf-8'))
 
-                print(f"Switched to protein: {selected_protein}")
+                print(f"Session {session_id}: Switched to protein: {selected_protein}")
             else:
                 self.send_response(400)
                 self.send_header('Content-type', 'application/json')
+                self.send_session_cookie(session_id)
                 self.end_headers()
 
                 response = {
@@ -556,10 +653,22 @@ class MSAHandler(BaseHTTPRequestHandler):
         print(f"[{self.log_date_time_string()}] {format % args}")
 
 
+def cleanup_sessions_periodically():
+    """Background thread to clean up old sessions every 10 minutes."""
+    while True:
+        time.sleep(600)  # 10 minutes
+        cleanup_old_sessions()
+
+
 def run_server(port=8000):
+    # Start session cleanup thread
+    cleanup_thread = threading.Thread(target=cleanup_sessions_periodically, daemon=True)
+    cleanup_thread.start()
+
     server_address = ('', port)
     httpd = HTTPServer(server_address, MSAHandler)
     print(f"Server running on http://localhost:{port}")
+    print(f"Session timeout: {SESSION_TIMEOUT} seconds")
     print(f"Press Ctrl+C to stop")
     httpd.serve_forever()
 
