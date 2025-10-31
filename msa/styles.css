@@ -267,7 +267,7 @@ main {
 #matrix-selection {
     fill: rgba(255, 165, 0, 0.1) !important;
     stroke: #00ff00 !important;
-    stroke-width: 2 !important;
+    stroke-width: 5 !important;
 }
 
 .matrix-left h3 {
