@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSA Visualizations</title>
+    <title>MSA Visualization</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-plugin.css">
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-plugin.js"></script>
@@ -14,15 +14,14 @@
             <select id="protein-selector">
                 <!-- Options will be populated by JavaScript -->
             </select>
-            <h1>MSA Visualizations</h1>
         </header>
         <main>
             <div id="tabs">
-                <button id="alignment-tab" class="tab-button active">Alignment</button>
-                <button id="correlation-tab" class="tab-button">Correlation</button>
+                <button id="mutation-tab" class="tab-button active">Mutation</button>
+                <button id="alignment-tab" class="tab-button">Alignment</button>
             </div>
 
-            <div id="alignment-content" class="tab-content active">
+            <div id="alignment-content" class="tab-content" style="display: none;">
                 <div id="file-loader">
                     <p>Loading lamprey.a3m...</p>
                 </div>
@@ -40,8 +39,8 @@
                 </div>
             </div>
 
-            <div id="correlation-content" class="tab-content" style="display: none;">
-                <div id="controls-correlation">
+            <div id="mutation-content" class="tab-content active">
+                <div id="controls-mutation">
                     <div id="matrix-spinner" class="spinner" style="display: none;"></div>
                 </div>
                 <div id="matrix-visualization" style="display: none;">

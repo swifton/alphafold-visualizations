@@ -68,8 +68,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Reload matrix data for the new protein
                 await loadMatrix();
 
-                // If the Correlation tab is currently visible, reinitialize Molstar
-                if (correlationContent.classList.contains('active')) {
+                // If the Mutation tab is currently visible, reinitialize Molstar
+                if (mutationContent.classList.contains('active')) {
                     try {
                         await fetchReferenceSequence();
                         await initMolstarViewer();
@@ -90,27 +90,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Set up tab switching
     const alignmentTab = document.getElementById('alignment-tab');
-    const correlationTab = document.getElementById('correlation-tab');
+    const mutationTab = document.getElementById('mutation-tab');
     const alignmentContent = document.getElementById('alignment-content');
-    const correlationContent = document.getElementById('correlation-content');
+    const mutationContent = document.getElementById('mutation-content');
 
     alignmentTab.addEventListener('click', () => {
         // Switch to alignment tab
         alignmentTab.classList.add('active');
-        correlationTab.classList.remove('active');
+        mutationTab.classList.remove('active');
         alignmentContent.classList.add('active');
-        correlationContent.classList.remove('active');
+        mutationContent.classList.remove('active');
         alignmentContent.style.display = 'block';
-        correlationContent.style.display = 'none';
+        mutationContent.style.display = 'none';
     });
 
-    correlationTab.addEventListener('click', async () => {
-        // Switch to correlation tab
-        correlationTab.classList.add('active');
+    mutationTab.addEventListener('click', async () => {
+        // Switch to mutation tab
+        mutationTab.classList.add('active');
         alignmentTab.classList.remove('active');
-        correlationContent.classList.add('active');
+        mutationContent.classList.add('active');
         alignmentContent.classList.remove('active');
-        correlationContent.style.display = 'block';
+        mutationContent.style.display = 'block';
         alignmentContent.style.display = 'none';
 
         // Initialize Molstar only when the tab is first opened (when it's visible)
@@ -131,6 +131,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Load matrix automatically
     await loadMatrix();
+
+    // If the Mutation tab is currently visible, initialize Molstar
+    if (mutationContent.classList.contains('active')) {
+        try {
+            await initMolstarViewer();
+            molstarInitialized = true;
+        } catch (e) {
+            console.error('Error reinitializing Molstar after protein change:', e);
+        }
+    }
 
     // Add event listener to Previous button
     const previousBtn = document.getElementById('previous-btn');
@@ -558,7 +568,7 @@ async function loadMatrix() {
 
             matrixVisualization.style.display = 'block';
 
-            // Note: Molstar will be initialized when the Correlation tab is first clicked
+            // Note: Molstar will be initialized when the Mutation tab is first clicked
             console.log('Matrix visualization displayed');
         } else {
             throw new Error(data.error || 'Failed to generate matrix');
