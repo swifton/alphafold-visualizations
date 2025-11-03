@@ -505,6 +505,19 @@ class MSAHandler(BaseHTTPRequestHandler):
             }
             self.wfile.write(json.dumps(response).encode())
 
+        elif self.path == '/health' or self.path == '/api/health':
+            # Health check endpoint
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+
+            response = {
+                'status': 'ok',
+                'service': 'MSA Visualization Server',
+                'timestamp': time.time()
+            }
+            self.wfile.write(json.dumps(response).encode())
+
         else:
             self.send_response(404)
             self.end_headers()
