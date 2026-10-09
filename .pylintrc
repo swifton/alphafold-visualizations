@@ -1,0 +1,29 @@
+# Pylint configuration for alphafold-visualizations.
+#
+# Only checks that are structurally unavoidable here, or deliberate design
+# choices, are disabled. Everything else stays enabled and is held in check by
+# the --fail-under floor in .github/workflows/pylint.yml: the floor is raised
+# as findings are cleaned up, so the score can only ratchet upwards.
+
+[MAIN]
+disable=
+    # do_GET is a long dispatch chain over self.path. Splitting it into
+    # per-route methods is a worthwhile refactor, but a separate one.
+    too-many-branches,
+    too-many-statements,
+    too-many-locals,
+    # The API endpoints intentionally convert any failure into a JSON
+    # {'success': False, 'error': ...} response rather than a 500.
+    broad-exception-caught,
+    # Only hit between plot_matrix.py and server.py, which share a small
+    # .a3m parsing preamble by design.
+    duplicate-code,
+
+[BASIC]
+# do_GET / do_POST are mandated by BaseHTTPRequestHandler, so they cannot
+# follow snake_case. All other methods still must.
+method-rgx=(do_[A-Z]+|_?[a-z][a-z0-9_]{2,40})$
+
+# Module-level counter guarded by uniprot_lock; it is mutable state, not a
+# constant, so UPPER_CASE would be misleading.
+good-names=uniprot_request_counter

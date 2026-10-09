@@ -20,9 +20,9 @@ jobs:
         pip install pylint
         pip install -r msa/requirements.txt
     - name: Analysing the code with pylint
-      env:
-            # test_alignment.py does `from server import align_sequences`,
-            # so msa/ must be importable for pylint to resolve it.
-            PYTHONPATH: msa
+      # --fail-on=E: any error-category finding fails the build outright.
+      # --fail-under: the score floor, currently the score of a clean tree.
+      #   Raise it as findings are fixed so the score can only ratchet up.
+      #   Checks that are disabled outright live in .pylintrc.
       run: |
-        pylint $(git ls-files '*.py')
+        pylint --fail-on=E --fail-under=9.4 $(git ls-files '*.py')

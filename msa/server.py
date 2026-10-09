@@ -158,10 +158,10 @@ def build_matrix_from_file(filename):
                 lines.append(line)
                 if first_line is None:
                     first_line = line
-                    seq_len = len(first_line)
     if first_line is None:
         raise ValueError("No valid lines found in file.")
 
+    seq_len = len(first_line)
     diff_count = np.zeros(seq_len, dtype=float)
     mutation_matrix = np.zeros((seq_len, seq_len), dtype=float)
     alignment_quality = []  # Track number of properly aligned residues per sequence
@@ -462,14 +462,18 @@ class MSAHandler(BaseHTTPRequestHandler):
 
         elif self.path == '/api/reference-sequence':
             # API endpoint to get the reference sequence
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_session_cookie(session_id)
             self.end_headers()
 
             try:
                 # Read the reference sequence from .a3m file (line 3, index 2)
-                a3m_path = f'examples/{MSAHandler.current_protein}/{MSAHandler.current_protein}.a3m'
-                with open(a3m_path, 'r') as f:
+                a3m_path = f'examples/{session["protein_name"]}/{session["protein_name"]}.a3m'
+                with open(a3m_path, 'r', encoding='utf-8') as f:
                     lines = f.readlines()
                     if len(lines) > 2:
                         ref_seq = lines[2].rstrip('\n').replace('-', '')
