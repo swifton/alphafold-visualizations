@@ -1,6 +1,7 @@
+import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
 
 def build_matrix_from_file(filename):
     first_line = None

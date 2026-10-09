@@ -2,18 +2,19 @@
 """
 Minimal web server for MSA visualization
 """
-from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
+import math
 import os
 import random
-import time
-import numpy as np
 import threading
-import urllib.request
+import time
 import urllib.error
-import math
+import urllib.request
 import uuid
 from http.cookies import SimpleCookie
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+import numpy as np
 
 # Configuration
 PROTEIN_NAME = 'insulin'
