@@ -86,7 +86,7 @@ while true; do
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting server..." | tee -a "$LOG_FILE"
 
     # Start the server and log output
-    python3 server.py 2>&1 | tee -a "$LOG_FILE"
+    python3 -u server.py 2>&1 | tee -a "$LOG_FILE"
 
     # If we get here, the server exited
     EXIT_CODE=$?
