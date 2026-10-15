@@ -4,6 +4,8 @@ let CELL_SIZE = 10
 // Global state for matrix rendering
 let currentMatrixData = null;
 let currentDiffCountData = null;
+let currentDistogramData = null;
+let currentView = 'mutation'; // 'mutation' | 'distogram'
 
 // Global state for UniProt polling
 let currentRequestId = null;
@@ -166,21 +168,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Debounce resize events
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
-            if (currentMatrixData) {
+            const active = getActiveViewData();
+            if (active) {
                 console.log('Window resized, recalculating cell size and re-rendering matrix');
-                // Recalculate cell size
-                CELL_SIZE = calculateCellSize(currentMatrixData.size);
+                CELL_SIZE = calculateCellSize(active.size);
                 console.log(`New cell size: ${CELL_SIZE}px`);
 
-                // Re-render matrix and diff_count
-                renderMatrixSVG(
-                    currentMatrixData.matrix,
-                    currentMatrixData.size,
-                    currentMatrixData.minValue,
-                    currentMatrixData.maxValue
-                );
+                renderMatrixSVG(active.matrix, active.size, active.minValue, active.maxValue);
 
-                if (currentDiffCountData) {
+                if (currentView === 'mutation' && currentDiffCountData) {
                     renderDiffCountSVG(
                         currentDiffCountData.diffCount,
                         currentDiffCountData.size,
@@ -191,7 +187,93 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }, 250); // Wait 250ms after resize stops
     });
+
+    // Wire up matrix view toggle
+    document.getElementById('view-mutation-btn').addEventListener('click', () => switchView('mutation'));
+    document.getElementById('view-distogram-btn').addEventListener('click', () => switchView('distogram'));
 });
+
+function getActiveViewData() {
+    if (currentView === 'distogram') return currentDistogramData;
+    return currentMatrixData;
+}
+
+async function switchView(view) {
+    if (view === currentView) return;
+
+    if (view === 'distogram') {
+        // Lazy-load distogram on first switch
+        if (!currentDistogramData) {
+            const ok = await loadDistogram();
+            if (!ok) return;
+        }
+        currentView = 'distogram';
+    } else {
+        currentView = 'mutation';
+    }
+
+    // Update button states
+    document.getElementById('view-mutation-btn').classList.toggle('active', currentView === 'mutation');
+    document.getElementById('view-distogram-btn').classList.toggle('active', currentView === 'distogram');
+
+    // Update heading
+    const heading = document.getElementById('matrix-heading');
+    heading.textContent = currentView === 'distogram' ? 'Distogram (expected distance, Å)' : 'Mutation Matrix';
+
+    // Show/hide mutation-specific panels
+    const diffCountSvg = document.getElementById('diff-count-svg');
+    const valuesPlotContainer = document.getElementById('matrix-values-plot-container');
+    if (currentView === 'distogram') {
+        diffCountSvg.style.display = 'none';
+        valuesPlotContainer.style.display = 'none';
+    } else {
+        diffCountSvg.style.display = '';
+        if (currentMatrixData) valuesPlotContainer.style.display = 'block';
+    }
+
+    const active = getActiveViewData();
+    if (active) {
+        CELL_SIZE = calculateCellSize(active.size);
+        renderMatrixSVG(active.matrix, active.size, active.minValue, active.maxValue);
+        if (currentView === 'mutation' && currentDiffCountData) {
+            renderDiffCountSVG(
+                currentDiffCountData.diffCount,
+                currentDiffCountData.size,
+                currentDiffCountData.diffCountMin,
+                currentDiffCountData.diffCountMax
+            );
+        }
+    }
+}
+
+async function loadDistogram() {
+    try {
+        console.log('Requesting distogram from server...');
+        const response = await fetch('/api/distogram');
+        if (!response.ok) {
+            throw new Error(`Failed to load distogram: ${response.statusText}`);
+        }
+        const data = await response.json();
+        if (!data.success || !data.available) {
+            console.warn('Distogram not available');
+            return false;
+        }
+        const { min: minValue, max: maxValue } = calculateMatrixMinMax(data.matrix, data.size);
+        currentDistogramData = {
+            matrix: data.matrix,
+            size: data.size,
+            minValue,
+            maxValue,
+            blockName: data.block_name
+        };
+        console.log(`Distogram loaded (block ${data.block_name}), min: ${minValue.toFixed(2)} Å, max: ${maxValue.toFixed(2)} Å`);
+        return true;
+    } catch (error) {
+        console.error('Error loading distogram:', error);
+        alert(`Error loading distogram: ${error.message}`);
+        return false;
+    }
+}
 
 async function loadSequences(endpoint) {
     const fileLoader = document.getElementById('file-loader');
@@ -565,6 +647,18 @@ async function loadMatrix() {
             // Render the alignment quality plot in the alignment tab
             renderAlignmentQualityPlot(data.alignment_quality);
             document.getElementById('alignment-quality-container').style.display = 'block';
+
+            // Show/hide distogram toggle based on availability
+            const toggleContainer = document.getElementById('matrix-view-toggle');
+            toggleContainer.style.display = data.distogram_available ? 'inline-flex' : 'none';
+
+            // Reset view to mutation when matrix is (re)loaded
+            currentView = 'mutation';
+            currentDistogramData = null;
+            document.getElementById('view-mutation-btn').classList.add('active');
+            document.getElementById('view-distogram-btn').classList.remove('active');
+            document.getElementById('matrix-heading').textContent = 'Mutation Matrix';
+            document.getElementById('diff-count-svg').style.display = '';
 
             matrixVisualization.style.display = 'block';
 

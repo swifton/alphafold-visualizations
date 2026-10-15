@@ -37,6 +37,7 @@ def create_session():
             'protein_name': PROTEIN_NAME,
             'last_access': time.time(),
             'matrix_cache': None,
+            'distogram_cache': None,
             'sequences': None,
             'current_index': 0,
             'uniprot_data': {},
@@ -274,6 +275,42 @@ def get_matrix_data(filename):
     }
 
 
+def get_distogram_path(protein_name):
+    """Return the path to the distogram .npz file for a protein, or None if missing."""
+    path = f'examples/{protein_name}/{protein_name}_distograms.npz'
+    return path if os.path.exists(path) else None
+
+
+def get_distogram_data(protein_name):
+    """
+    Load the last distogram from the .npz file and reduce the per-bin
+    probability distribution to an expected distance per residue pair.
+
+    AlphaFold distograms typically use 64 bins spanning 2-22 Å.
+    """
+    path = get_distogram_path(protein_name)
+    if path is None:
+        return None
+
+    with np.load(path) as npz:
+        keys = list(npz.keys())
+        if not keys:
+            return None
+        block_name = keys[-1]
+        distogram = npz[block_name]  # shape (N, N, num_bins)
+
+    num_bins = distogram.shape[-1]
+    bin_centers = np.linspace(2.0, 22.0, num_bins, dtype=np.float32)
+    expected_distance = np.einsum('ijk,k->ij', distogram, bin_centers)
+
+    return {
+        'matrix': expected_distance.tolist(),
+        'size': int(expected_distance.shape[0]),
+        'block_name': block_name,
+        'num_blocks': len(keys)
+    }
+
+
 class MSAHandler(BaseHTTPRequestHandler):
 
     def get_session_id(self):
@@ -448,10 +485,46 @@ class MSAHandler(BaseHTTPRequestHandler):
                     matrix_data = get_matrix_data(a3m_path)
                     response = {
                         'success': True,
+                        'distogram_available': get_distogram_path(session['protein_name']) is not None,
                         **matrix_data
                     }
                     # Cache it in session
                     session['matrix_cache'] = response
+            except Exception as e:
+                response = {
+                    'success': False,
+                    'error': str(e)
+                }
+
+            self.wfile.write(json.dumps(response).encode())
+
+        elif self.path == '/api/distogram':
+            # API endpoint to get the last distogram from the .npz file
+            session_id = self.get_session_id()
+            session = get_session(session_id)
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_session_cookie(session_id)
+            self.end_headers()
+
+            try:
+                if session.get('distogram_cache'):
+                    response = session['distogram_cache']
+                else:
+                    distogram_data = get_distogram_data(session['protein_name'])
+                    if distogram_data is None:
+                        response = {
+                            'success': True,
+                            'available': False
+                        }
+                    else:
+                        response = {
+                            'success': True,
+                            'available': True,
+                            **distogram_data
+                        }
+                        session['distogram_cache'] = response
             except Exception as e:
                 response = {
                     'success': False,
@@ -638,6 +711,8 @@ class MSAHandler(BaseHTTPRequestHandler):
                 session['current_index'] = 0
                 # Clear matrix cache
                 session['matrix_cache'] = None
+                # Clear distogram cache
+                session['distogram_cache'] = None
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
