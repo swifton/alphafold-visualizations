@@ -7,9 +7,28 @@ let currentDiffCountData = null;
 let currentDistogramData = null;
 let currentView = 'mutation'; // 'mutation' | 'distogram'
 
-// Global state for UniProt polling
-let currentRequestId = null;
-let uniprotPollInterval = null;
+// Which protein is selected, and the sequence data for it. These used to live
+// in a server-side session; the site is static now, so they live here.
+let currentProtein = '';
+let currentSequences = null; // { reference, reference_stripped, headers, sequences, total }
+let currentIndex = 0;
+let referenceSequence = '';
+
+// Incremented per sequence view so a slow UniProt response for a sequence the
+// user has already clicked past can be discarded.
+let currentRequestId = 0;
+
+function dataUrl(...parts) {
+    return ['data', currentProtein, ...parts].join('/');
+}
+
+async function fetchJson(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to load ${url}: ${response.statusText}`);
+    }
+    return response.json();
+}
 
 // Track if Molstar has been initialized
 let molstarInitialized = false;
@@ -21,12 +40,21 @@ let hoverResidues = [];
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('MSA Visualizations app loaded');
 
-    // Populate protein selector dropdown
+    // Populate protein selector dropdown from the generated manifest
     const proteinSelector = document.getElementById('protein-selector');
-    const availableProteins = window.AVAILABLE_PROTEINS || [];
-    const currentProtein = window.CURRENT_PROTEIN || '';
+    let manifest;
+    try {
+        manifest = await fetchJson('data/manifest.json');
+    } catch (error) {
+        console.error('Error loading manifest:', error);
+        document.getElementById('file-loader').innerHTML =
+            `<p style="color: red;">Could not load data/manifest.json: ${error.message}</p>`;
+        return;
+    }
 
-    availableProteins.forEach(protein => {
+    currentProtein = manifest.default;
+
+    manifest.proteins.forEach(protein => {
         const option = document.createElement('option');
         option.value = protein;
         option.textContent = protein;
@@ -38,56 +66,37 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Handle protein selection change
     proteinSelector.addEventListener('change', async (event) => {
-        const selectedProtein = event.target.value;
-        console.log(`Protein selected: ${selectedProtein}`);
+        currentProtein = event.target.value;
+        console.log(`Protein selected: ${currentProtein}`);
 
-        // Send request to server with selected protein
-        try {
-            const response = await fetch('/api/select-protein', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ protein: selectedProtein })
-            });
+        // Hide visualizations while loading
+        const matrixVisualization = document.getElementById('matrix-visualization');
+        const alignmentQualityContainer = document.getElementById('alignment-quality-container');
+        matrixVisualization.style.display = 'none';
+        alignmentQualityContainer.style.display = 'none';
 
-            if (response.ok) {
-                console.log(`Successfully selected protein: ${selectedProtein}`);
+        // Reset molstar viewer and flag (will be reinitialized when tab is opened)
+        molstarViewer = null;
+        molstarInitialized = false;
 
-                // Hide visualizations while loading
-                const matrixVisualization = document.getElementById('matrix-visualization');
-                const alignmentQualityContainer = document.getElementById('alignment-quality-container');
-                matrixVisualization.style.display = 'none';
-                alignmentQualityContainer.style.display = 'none';
+        // Start the new protein from its first sequence
+        currentSequences = null;
+        currentIndex = 0;
 
-                // Reset molstar viewer and flag (will be reinitialized when tab is opened)
-                molstarViewer = null;
-                molstarInitialized = false;
+        await loadSequences();
+        await loadMatrix();
 
-                // Reload alignment data for the new protein
-                await loadSequences('/api/msa');
-
-                // Reload matrix data for the new protein
-                await loadMatrix();
-
-                // If the Mutation tab is currently visible, reinitialize Molstar
-                if (mutationContent.classList.contains('active')) {
-                    try {
-                        await fetchReferenceSequence();
-                        await initMolstarViewer();
-                        molstarInitialized = true;
-                    } catch (e) {
-                        console.error('Error reinitializing Molstar after protein change:', e);
-                    }
-                }
-
-                console.log(`Reloaded data for ${selectedProtein}`);
-            } else {
-                console.error('Failed to select protein:', response.statusText);
+        // If the Mutation tab is currently visible, reinitialize Molstar
+        if (mutationContent.classList.contains('active')) {
+            try {
+                await initMolstarViewer();
+                molstarInitialized = true;
+            } catch (e) {
+                console.error('Error reinitializing Molstar after protein change:', e);
             }
-        } catch (error) {
-            console.error('Error selecting protein:', error);
         }
+
+        console.log(`Reloaded data for ${currentProtein}`);
     });
 
     // Set up tab switching
@@ -129,7 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Load initial sequences
-    await loadSequences('/api/msa');
+    await loadSequences();
 
     // Load matrix automatically
     await loadMatrix();
@@ -147,19 +156,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Add event listener to Previous button
     const previousBtn = document.getElementById('previous-btn');
     previousBtn.addEventListener('click', async () => {
-        await loadSequences('/api/previous');
+        currentIndex -= 1;
+        await loadSequences();
     });
 
     // Add event listener to Next button
     const nextBtn = document.getElementById('next-btn');
     nextBtn.addEventListener('click', async () => {
-        await loadSequences('/api/next');
+        currentIndex += 1;
+        await loadSequences();
     });
 
     // Add event listener to Random button
     const randomBtn = document.getElementById('random-btn');
     randomBtn.addEventListener('click', async () => {
-        await loadSequences('/api/random');
+        if (currentSequences && currentSequences.total > 0) {
+            currentIndex = Math.floor(Math.random() * currentSequences.total);
+        }
+        await loadSequences();
     });
 
     // Add window resize handler to recalculate cell size and re-render matrix
@@ -248,12 +262,8 @@ async function switchView(view) {
 
 async function loadDistogram() {
     try {
-        console.log('Requesting distogram from server...');
-        const response = await fetch('/api/distogram');
-        if (!response.ok) {
-            throw new Error(`Failed to load distogram: ${response.statusText}`);
-        }
-        const data = await response.json();
+        console.log(`Loading distogram for ${currentProtein}...`);
+        const data = await fetchJson(dataUrl('distogram.json'));
         if (!data.success || !data.available) {
             console.warn('Distogram not available');
             return false;
@@ -275,93 +285,122 @@ async function loadDistogram() {
     }
 }
 
-async function loadSequences(endpoint) {
+// Fetch the sequence bundle for the current protein once, then keep it.
+async function ensureSequences() {
+    if (!currentSequences) {
+        currentSequences = await fetchJson(dataUrl('sequences.json'));
+        referenceSequence = currentSequences.reference_stripped;
+        console.log(`Loaded ${currentSequences.total} sequences for ${currentProtein}`);
+    }
+    return currentSequences;
+}
+
+// Render the sequence at currentIndex, wrapping around at either end. This
+// replaces the /api/msa, /api/previous, /api/next and /api/random endpoints;
+// the index is just a local variable now.
+async function loadSequences() {
     const fileLoader = document.getElementById('file-loader');
 
     try {
-        // Fetch MSA data from backend API
-        const response = await fetch(endpoint);
+        const data = await ensureSequences();
 
-        if (!response.ok) {
-            throw new Error(`Failed to load file: ${response.statusText}`);
+        if (data.total === 0) {
+            throw new Error('No comparison sequences in this alignment');
         }
 
-        const data = await response.json();
+        // Wrap around at either end, as the server used to
+        currentIndex = ((currentIndex % data.total) + data.total) % data.total;
 
-        // Stop any existing UniProt polling
-        if (uniprotPollInterval) {
-            clearInterval(uniprotPollInterval);
-            uniprotPollInterval = null;
-        }
+        const seq1 = data.reference;
+        const seq2 = data.sequences[currentIndex];
+        const seq2Header = data.headers[currentIndex];
 
-        // Update current request ID
-        currentRequestId = data.request_id;
+        // Discard any UniProt response for a sequence we have already left
+        const requestId = ++currentRequestId;
 
-        // Update the display with initial data (showing spinner if UniProt ID exists)
+        const uniprotId = parseUniprotId(seq2Header);
+
         let seq2Info = '';
-        if (data.uniprot_id) {
+        if (uniprotId) {
             seq2Info = `- <span class="uniprot-spinner">⟳</span> <span id="protein-info">Loading...</span>`;
-            // Start polling for UniProt data
-            startUniprotPolling();
-        } else if (data.seq2_header) {
-            seq2Info = `- ${data.seq2_header}`;
+        } else if (seq2Header) {
+            seq2Info = `- ${seq2Header}`;
         }
 
         fileLoader.innerHTML = `
-            <p>File: ${data.filename}</p>
-            <p>Showing sequence ${data.current_index + 1} of ${data.total_sequences}</p>
-            <p>Sequence 1 (reference): ${data.seq1_length} amino acids</p>
-            <p>Sequence 2: ${data.seq2_length} amino acids ${seq2Info}</p>
+            <p>File: ${currentProtein}.a3m</p>
+            <p>Showing sequence ${currentIndex + 1} of ${data.total}</p>
+            <p>Sequence 1 (reference): ${seq1.replace(/-/g, '').length} amino acids</p>
+            <p>Sequence 2: ${seq2.replace(/-/g, '').length} amino acids ${seq2Info}</p>
         `;
 
-        console.log(`Loaded sequence ${data.current_index + 1} of ${data.total_sequences}`);
+        console.log(`Loaded sequence ${currentIndex + 1} of ${data.total}`);
 
         // Clear previous visualization
         const svg = document.getElementById('sequence-viz');
         svg.innerHTML = '';
 
-        visualizeAlignment(data.seq1, data.seq2);
+        visualizeAlignment(seq1, seq2);
+
+        // UniProt allows cross-origin reads, so the browser can ask it directly
+        if (uniprotId) {
+            fetchUniprotData(uniprotId, requestId);
+        }
 
     } catch (error) {
         console.error('Error loading file:', error);
         fileLoader.innerHTML = `
             <h2>MSA Sequence Visualization</h2>
             <p style="color: red;">Error loading MSA data: ${error.message}</p>
-            <p>Make sure the Python server is running (python3 server.py)</p>
         `;
     }
 }
 
-function startUniprotPolling() {
-    // Poll every 500ms for UniProt data
-    uniprotPollInterval = setInterval(async () => {
-        try {
-            const response = await fetch('/api/uniprot-poll');
-            if (!response.ok) return;
+// UniRef100 headers look like: >UniRef100_<UniProtID> <other tab-separated fields>
+const UNIREF_PREFIX = '>UniRef100_';
 
-            const result = await response.json();
-            if (result.success && result.data && result.data.request_id === currentRequestId) {
-                // We got data for the current request
-                const proteinInfo = document.getElementById('protein-info');
-                if (proteinInfo && result.data.protein_name && result.data.organism) {
-                    proteinInfo.innerHTML = `<strong>${result.data.protein_name}</strong> (${result.data.organism})`;
+function parseUniprotId(header) {
+    if (!header || !header.startsWith(UNIREF_PREFIX)) {
+        return null;
+    }
+    return header.slice(UNIREF_PREFIX.length).split(/\s/)[0] || null;
+}
 
-                    // Remove spinner
-                    const spinner = document.querySelector('.uniprot-spinner');
-                    if (spinner) {
-                        spinner.remove();
-                    }
+async function fetchUniprotData(uniprotId, requestId) {
+    try {
+        const data = await fetchJson(`https://rest.uniprot.org/uniprotkb/${uniprotId}.json`);
 
-                    // Stop polling
-                    clearInterval(uniprotPollInterval);
-                    uniprotPollInterval = null;
-                    console.log('Received UniProt data');
-                }
-            }
-        } catch (error) {
-            console.error('Error polling UniProt data:', error);
+        // The user may have clicked Next while this was in flight
+        if (requestId !== currentRequestId) {
+            console.log(`Discarding stale UniProt data for request #${requestId}`);
+            return;
         }
-    }, 500);
+
+        const proteinName = data.proteinDescription?.recommendedName?.fullName?.value;
+        const organism = data.organism?.scientificName;
+
+        const proteinInfo = document.getElementById('protein-info');
+        if (proteinInfo && proteinName && organism) {
+            proteinInfo.innerHTML = `<strong>${proteinName}</strong> (${organism})`;
+            const spinner = document.querySelector('.uniprot-spinner');
+            if (spinner) {
+                spinner.remove();
+            }
+            console.log('Received UniProt data');
+        }
+    } catch (error) {
+        console.error('Error fetching UniProt data:', error);
+        if (requestId === currentRequestId) {
+            const proteinInfo = document.getElementById('protein-info');
+            if (proteinInfo) {
+                proteinInfo.textContent = 'metadata unavailable';
+            }
+            const spinner = document.querySelector('.uniprot-spinner');
+            if (spinner) {
+                spinner.remove();
+            }
+        }
+    }
 }
 
 function visualizeAlignment(seq1, seq2) {
@@ -564,16 +603,9 @@ async function loadMatrix() {
             spinner.style.display = 'block';
         }
 
-        console.log('Requesting matrix from server...');
+        console.log(`Loading matrix for ${currentProtein}...`);
 
-        // Make request to server
-        const response = await fetch('/api/matrix');
-
-        if (!response.ok) {
-            throw new Error(`Failed to load matrix: ${response.statusText}`);
-        }
-
-        const data = await response.json();
+        const data = await fetchJson(dataUrl('matrix.json'));
         console.log('Matrix received');
 
         if (data.success) {
@@ -947,7 +979,6 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
 }
 
 let molstarViewer = null;
-let referenceSequence = '';
 
 // Track selected region residues (persist across hovers)
 let selectedRegionResidues = [];
@@ -1333,7 +1364,7 @@ async function initMolstarViewer() {
         // Initialize with options
         const options = {
             customData: {
-                url: `/pdb`,
+                url: new URL(dataUrl(`${currentProtein}.pdb`), window.location.href).href,
                 format: 'pdb'
             },
             hideControls: true,
@@ -1357,23 +1388,12 @@ async function initMolstarViewer() {
     }
 }
 
+// The reference sequence arrives with the sequence bundle, so this only has
+// to make sure that bundle has been loaded.
 async function fetchReferenceSequence() {
     try {
-        console.log('Fetching reference sequence...');
-        const response = await fetch('/api/reference-sequence');
-
-        if (!response.ok) {
-            throw new Error(`Failed to fetch reference sequence: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-        if (data.success) {
-            referenceSequence = data.sequence;
-            console.log(`Reference sequence loaded: ${referenceSequence.length} residues`);
-        } else {
-            throw new Error(data.error || 'Failed to load reference sequence');
-        }
+        await ensureSequences();
+        console.log(`Reference sequence loaded: ${referenceSequence.length} residues`);
     } catch (error) {
         console.error('Error fetching reference sequence:', error);
     }
