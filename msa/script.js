@@ -188,7 +188,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 CELL_SIZE = calculateCellSize(active.size);
                 console.log(`New cell size: ${CELL_SIZE}px`);
 
-                renderMatrixSVG(active.matrix, active.size, active.minValue, active.maxValue);
+                renderMatrix(active.matrix, active.size, active.minValue, active.maxValue);
 
                 if (currentView === 'mutation' && currentDiffCountData) {
                     renderDiffCountSVG(
@@ -248,7 +248,7 @@ async function switchView(view) {
     const active = getActiveViewData();
     if (active) {
         CELL_SIZE = calculateCellSize(active.size);
-        renderMatrixSVG(active.matrix, active.size, active.minValue, active.maxValue);
+        renderMatrix(active.matrix, active.size, active.minValue, active.maxValue);
         if (currentView === 'mutation' && currentDiffCountData) {
             renderDiffCountSVG(
                 currentDiffCountData.diffCount,
@@ -668,7 +668,7 @@ async function loadMatrix() {
             };
 
             // Render the matrix as SVG
-            renderMatrixSVG(data.matrix, data.size, minValue, maxValue);
+            renderMatrix(data.matrix, data.size, minValue, maxValue);
 
             // Render the diff_count visualization
             renderDiffCountSVG(data.diff_count, data.size, diffCountMin, diffCountMax);
@@ -711,7 +711,12 @@ async function loadMatrix() {
     }
 }
 
-function renderMatrixSVG(matrix, size, minValue, maxValue) {
+function renderMatrix(matrix, size, minValue, maxValue) {
+    // The cells are drawn on a canvas; the SVG laid over it holds only the
+    // axis labels and the hover/selection outlines. One SVG rect per cell made
+    // hovering slow for large proteins (118k rects for OmpA).
+    const plot = document.getElementById('matrix-plot');
+    const canvas = document.getElementById('matrix-canvas');
     const svg = document.getElementById('matrix-svg');
     const positionDisplay = document.getElementById('matrix-position');
 
@@ -742,7 +747,13 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
     svg.setAttribute('height', height);
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
-    // Create color scale function (coolwarm colormap approximation)
+    // Size the canvas in device pixels so the cells stay sharp on HiDPI screens
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = `${width}px`;
+
+    // Create color scale function (coolwarm colormap approximation), as [r, g, b]
     const getColor = (value) => {
         // Normalize value to 0-1 range
         const normalized = (value - minValue) / (maxValue - minValue);
@@ -751,19 +762,40 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
         if (normalized < 0.5) {
             // Blue to white
             const t = normalized * 2;
-            const r = Math.round(59 + (255 - 59) * t);
-            const g = Math.round(76 + (255 - 76) * t);
-            const b = Math.round(192 + (255 - 192) * t);
-            return `rgb(${r}, ${g}, ${b})`;
+            return [
+                Math.round(59 + (255 - 59) * t),
+                Math.round(76 + (255 - 76) * t),
+                Math.round(192 + (255 - 192) * t)
+            ];
         } else {
             // White to red
             const t = (normalized - 0.5) * 2;
-            const r = 255;
-            const g = Math.round(255 - 255 * t);
-            const b = Math.round(255 - 89 * t);
-            return `rgb(${r}, ${g}, ${b})`;
+            return [255, Math.round(255 - 255 * t), Math.round(255 - 89 * t)];
         }
     };
+
+    // Paint one pixel per cell, then scale it up onto the canvas without smoothing
+    const cells = new ImageData(size, size);
+    for (let row = 0; row < size; row++) {
+        for (let col = 0; col < size; col++) {
+            const [r, g, b] = getColor(matrix[row][col]);
+            const i = (row * size + col) * 4;
+            cells.data[i] = r;
+            cells.data[i + 1] = g;
+            cells.data[i + 2] = b;
+            cells.data[i + 3] = 255;
+        }
+    }
+    const cellCanvas = document.createElement('canvas');
+    cellCanvas.width = size;
+    cellCanvas.height = size;
+    cellCanvas.getContext('2d').putImageData(cells, 0, 0);
+
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(cellCanvas, scaleSize, scaleSize, matrixWidth, matrixHeight);
 
     // Draw axis scales
     // Determine tick interval based on matrix size
@@ -818,7 +850,7 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
         svg.appendChild(tick);
     }
 
-    // Create highlight rectangle for hover (will be appended after cells to render on top)
+    // Create highlight rectangle for hover
     const highlightRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     highlightRect.setAttribute('id', 'matrix-highlight');
     highlightRect.setAttribute('fill', 'none');
@@ -836,98 +868,109 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
     selectionRect.setAttribute('pointer-events', 'none');
     selectionRect.setAttribute('visibility', 'hidden');
 
-    // Render each cell (offset by scaleSize)
-    for (let row = 0; row < size; row++) {
-        for (let col = 0; col < size; col++) {
-            const value = matrix[row][col];
-            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-
-            rect.setAttribute('x', scaleSize + col * cellSize);
-            rect.setAttribute('y', scaleSize + row * cellSize);
-            rect.setAttribute('width', cellSize);
-            rect.setAttribute('height', cellSize);
-            rect.setAttribute('fill', getColor(value));
-
-            // Add mousedown event to start drag selection
-            rect.addEventListener('mousedown', (event) => {
-                isDragging = true;
-                dragStartRow = row;
-                dragStartCol = col;
-                dragEndRow = row;
-                dragEndCol = col;
-                event.preventDefault();
-            });
-
-            // Add hover event to display position and highlight in Mol*
-            rect.addEventListener('mouseenter', (event) => {
-                // Update drag selection if dragging
-                if (isDragging) {
-                    dragEndRow = row;
-                    dragEndCol = col;
-
-                    // Update selection rectangle
-                    const minRow = Math.min(dragStartRow, dragEndRow);
-                    const maxRow = Math.max(dragStartRow, dragEndRow);
-                    const minCol = Math.min(dragStartCol, dragEndCol);
-                    const maxCol = Math.max(dragStartCol, dragEndCol);
-
-                    selectionRect.setAttribute('x', scaleSize + minCol * cellSize);
-                    selectionRect.setAttribute('y', scaleSize + minRow * cellSize);
-                    selectionRect.setAttribute('width', (maxCol - minCol + 1) * cellSize);
-                    selectionRect.setAttribute('height', (maxRow - minRow + 1) * cellSize);
-                    selectionRect.setAttribute('visibility', 'visible');
-                    return;
-                }
-                // Check keyboard modifiers to fix row or column
-                let displayRow = row;
-                let displayCol = col;
-
-                if (event.shiftKey) {
-                    // Shift key: fix the column, only row changes
-                    if (fixedCol === null) {
-                        fixedCol = col;
-                    }
-                    displayCol = fixedCol;
-                } else if (event.ctrlKey || event.metaKey) {
-                    // Ctrl/Cmd key: fix the row, only column changes
-                    if (fixedRow === null) {
-                        fixedRow = row;
-                    }
-                    displayRow = fixedRow;
-                } else {
-                    // No modifier: reset fixed values
-                    fixedRow = null;
-                    fixedCol = null;
-                }
-
-                const displayValue = matrix[displayRow][displayCol];
-                positionDisplay.textContent = `Position: (${displayRow}, ${displayCol}) Value: ${displayValue.toFixed(2)}`;
-                highlightResiduesInMolstar(displayRow, displayCol);
-
-                // Update highlight rectangle position
-                highlightRect.setAttribute('x', scaleSize + displayCol * cellSize);
-                highlightRect.setAttribute('y', scaleSize + displayRow * cellSize);
-                highlightRect.setAttribute('width', cellSize);
-                highlightRect.setAttribute('height', cellSize);
-                highlightRect.setAttribute('visibility', 'visible');
-            });
-
-            rect.addEventListener('mouseleave', () => {
-                positionDisplay.textContent = '';
-                clearHighlightInMolstar();
-                highlightRect.setAttribute('visibility', 'hidden');
-            });
-
-            svg.appendChild(rect);
-        }
-    }
-
-    // Append highlight rectangles AFTER all cells so they render on top
     svg.appendChild(highlightRect);
     svg.appendChild(selectionRect);
 
-    // Add mouseup handler to finish drag selection or clear selection on click
-    svg.addEventListener('mouseup', () => {
+    // Map a mouse event to the cell under the pointer, or null outside the cells
+    const cellAt = (event) => {
+        const box = canvas.getBoundingClientRect();
+        const x = (event.clientX - box.left) * width / box.width - scaleSize;
+        const y = (event.clientY - box.top) * height / box.height - scaleSize;
+        const row = Math.floor(y / cellSize);
+        const col = Math.floor(x / cellSize);
+        if (row < 0 || col < 0 || row >= size || col >= size) return null;
+        return { row, col };
+    };
+
+    // The cell the pointer was over at the last mouse event
+    let hoverCell = null;
+
+    const enterCell = (row, col, event) => {
+        // Update drag selection if dragging
+        if (isDragging) {
+            dragEndRow = row;
+            dragEndCol = col;
+
+            // Update selection rectangle
+            const minRow = Math.min(dragStartRow, dragEndRow);
+            const maxRow = Math.max(dragStartRow, dragEndRow);
+            const minCol = Math.min(dragStartCol, dragEndCol);
+            const maxCol = Math.max(dragStartCol, dragEndCol);
+
+            selectionRect.setAttribute('x', scaleSize + minCol * cellSize);
+            selectionRect.setAttribute('y', scaleSize + minRow * cellSize);
+            selectionRect.setAttribute('width', (maxCol - minCol + 1) * cellSize);
+            selectionRect.setAttribute('height', (maxRow - minRow + 1) * cellSize);
+            selectionRect.setAttribute('visibility', 'visible');
+            return;
+        }
+        // Check keyboard modifiers to fix row or column
+        let displayRow = row;
+        let displayCol = col;
+
+        if (event.shiftKey) {
+            // Shift key: fix the column, only row changes
+            if (fixedCol === null) {
+                fixedCol = col;
+            }
+            displayCol = fixedCol;
+        } else if (event.ctrlKey || event.metaKey) {
+            // Ctrl/Cmd key: fix the row, only column changes
+            if (fixedRow === null) {
+                fixedRow = row;
+            }
+            displayRow = fixedRow;
+        } else {
+            // No modifier: reset fixed values
+            fixedRow = null;
+            fixedCol = null;
+        }
+
+        const displayValue = matrix[displayRow][displayCol];
+        positionDisplay.textContent = `Position: (${displayRow}, ${displayCol}) Value: ${displayValue.toFixed(2)}`;
+        highlightResiduesInMolstar(displayRow, displayCol);
+
+        // Update highlight rectangle position
+        highlightRect.setAttribute('x', scaleSize + displayCol * cellSize);
+        highlightRect.setAttribute('y', scaleSize + displayRow * cellSize);
+        highlightRect.setAttribute('width', cellSize);
+        highlightRect.setAttribute('height', cellSize);
+        highlightRect.setAttribute('visibility', 'visible');
+    };
+
+    const leaveCells = () => {
+        positionDisplay.textContent = '';
+        clearHighlightInMolstar();
+        highlightRect.setAttribute('visibility', 'hidden');
+    };
+
+    // Handlers are assigned rather than added so that re-rendering replaces them
+
+    // Start drag selection
+    plot.onmousedown = (event) => {
+        const cell = cellAt(event);
+        if (!cell) return;
+        isDragging = true;
+        dragStartRow = cell.row;
+        dragStartCol = cell.col;
+        dragEndRow = cell.row;
+        dragEndCol = cell.col;
+        event.preventDefault();
+    };
+
+    // Display position and highlight in Mol* when the pointer reaches a new cell.
+    // Moving between cells goes straight to the next highlight, without clearing
+    // Mol* in between.
+    plot.onmousemove = (event) => {
+        const cell = cellAt(event);
+        if (cell && hoverCell && cell.row === hoverCell.row && cell.col === hoverCell.col) return;
+        if (!cell && hoverCell) leaveCells();
+        hoverCell = cell;
+        if (cell) enterCell(cell.row, cell.col, event);
+    };
+
+    // Finish drag selection or clear selection on click
+    plot.onmouseup = () => {
         if (isDragging) {
             isDragging = false;
 
@@ -962,15 +1005,19 @@ function renderMatrixSVG(matrix, size, minValue, maxValue) {
                 console.log(`Highlighting ${residues.size} residues in Molstar`);
             }
         }
-    });
+    };
 
-    // Add mouseleave handler to cancel drag if mouse leaves SVG
-    svg.addEventListener('mouseleave', () => {
+    // Clear the hover and cancel any drag when the mouse leaves the matrix
+    plot.onmouseleave = () => {
+        if (hoverCell) {
+            hoverCell = null;
+            leaveCells();
+        }
         if (isDragging) {
             isDragging = false;
             selectionRect.setAttribute('visibility', 'hidden');
         }
-    });
+    };
 
     console.log(`Rendered ${size}x${size} matrix with ${size * size} cells`);
 
