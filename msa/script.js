@@ -226,6 +226,11 @@ async function switchView(view) {
         currentView = 'mutation';
     }
 
+    applyView();
+}
+
+// Sync the toggle, heading and panels with currentView, and render its matrix
+function applyView() {
     // Update button states
     document.getElementById('view-mutation-btn').classList.toggle('active', currentView === 'mutation');
     document.getElementById('view-distogram-btn').classList.toggle('active', currentView === 'distogram');
@@ -565,10 +570,13 @@ function calculateCellSize(matrixSize) {
     const availableHeight = window.innerHeight - headerHeight - padding;
 
     // Calculate cell size to fit the matrix vertically
-    const cellSize = Math.floor(availableHeight / matrixSize);
+    const cellSize = availableHeight / matrixSize;
 
-    // Ensure cell size is at least 2px and at most 20px
-    return Math.max(2, Math.min(20, cellSize));
+    // Whole pixels (at most 20) keep cells crisp. Large proteins need less
+    // than 2px per cell to fit, and the canvas can draw fractional cells, so
+    // those only stop shrinking at 1px.
+    if (cellSize >= 2) return Math.min(20, Math.floor(cellSize));
+    return Math.max(1, cellSize);
 }
 
 function updateMolstarViewerSize(matrixHeight) {
@@ -667,12 +675,6 @@ async function loadMatrix() {
                 diffCountMax: diffCountMax
             };
 
-            // Render the matrix as SVG
-            renderMatrix(data.matrix, data.size, minValue, maxValue);
-
-            // Render the diff_count visualization
-            renderDiffCountSVG(data.diff_count, data.size, diffCountMin, diffCountMax);
-
             // Render the matrix values distribution plot
             renderMatrixValuesPlot(data.matrix, data.size);
 
@@ -684,15 +686,15 @@ async function loadMatrix() {
             const toggleContainer = document.getElementById('matrix-view-toggle');
             toggleContainer.style.display = data.distogram_available ? 'inline-flex' : 'none';
 
-            // Reset view to mutation when matrix is (re)loaded
+            // Open a (re)loaded protein on its distogram when it has one
             currentView = 'mutation';
             currentDistogramData = null;
-            document.getElementById('view-mutation-btn').classList.add('active');
-            document.getElementById('view-distogram-btn').classList.remove('active');
-            document.getElementById('matrix-heading').textContent = 'Mutation Matrix';
-            document.getElementById('diff-count-svg').style.display = '';
+            if (data.distogram_available && await loadDistogram()) {
+                currentView = 'distogram';
+            }
 
             matrixVisualization.style.display = 'block';
+            applyView();
 
             // Note: Molstar will be initialized when the Mutation tab is first clicked
             console.log('Matrix visualization displayed');
@@ -1400,6 +1402,8 @@ async function initMolstarViewer() {
         const parent = viewerElement.parentNode;
         const newViewerElement = document.createElement('div');
         newViewerElement.id = 'molstar-viewer';
+        // Keep the size updateMolstarViewerSize gave it to match the matrix
+        newViewerElement.style.cssText = viewerElement.style.cssText;
         parent.replaceChild(newViewerElement, viewerElement);
 
         // Small delay to ensure DOM is ready
@@ -1554,12 +1558,13 @@ function renderAlignmentQualityPlot(alignmentQuality) {
 
     // Add y-axis label
     const yAxisLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    yAxisLabel.setAttribute('x', -margin.top - plotHeight / 2);
-    yAxisLabel.setAttribute('y', 15);
+    // Placed at its rotation centre, so rotating keeps it inside the left margin
+    yAxisLabel.setAttribute('x', 16);
+    yAxisLabel.setAttribute('y', margin.top + plotHeight / 2);
     yAxisLabel.setAttribute('text-anchor', 'middle');
     yAxisLabel.setAttribute('font-size', '14px');
     yAxisLabel.setAttribute('fill', '#333');
-    yAxisLabel.setAttribute('transform', `rotate(-90, ${15}, ${margin.top + plotHeight / 2})`);
+    yAxisLabel.setAttribute('transform', `rotate(-90, 16, ${margin.top + plotHeight / 2})`);
     yAxisLabel.textContent = 'Properly Aligned Residues';
     svg.appendChild(yAxisLabel);
 

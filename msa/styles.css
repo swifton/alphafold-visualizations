@@ -20,7 +20,7 @@ body {
 header {
     background-color: #2c3e50;
     color: white;
-    padding: 1.5rem 2rem;
+    padding: 0.5rem 2rem;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     display: flex;
     align-items: center;
@@ -51,14 +51,14 @@ header h1 {
 
 main {
     flex: 1;
-    padding: 2rem;
+    padding: 1rem 2rem;
     width: 100%;
 }
 
 #tabs {
     display: flex;
     gap: 0.5rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.5rem;
     border-bottom: 2px solid #ddd;
 }
 
@@ -149,15 +149,21 @@ main {
 }
 
 #matrix-visualization {
-    margin-top: 2rem;
     padding: 1rem;
     background-color: white;
     border-radius: 4px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
+/* Heading and view toggle share one row to save vertical space */
+.matrix-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
 #matrix-visualization h2 {
-    margin-bottom: 1rem;
     color: #2c3e50;
 }
 
@@ -195,7 +201,11 @@ main {
     border-radius: 4px;
     font-family: monospace;
     font-size: 14px;
-    min-height: 24px;
+    /* Fixed height so the hint below does not move as the text comes and goes */
+    height: 40px;
+    line-height: 24px;
+    white-space: nowrap;
+    overflow: hidden;
     color: #2c3e50;
 }
 
